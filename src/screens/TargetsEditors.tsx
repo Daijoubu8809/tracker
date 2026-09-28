@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Icon, NumField, Segmented } from '../components/ui';
+import { Icon, Segmented } from '../components/ui';
+import { NumberField } from '../components/NumberField';
 import { saveSettings } from '../lib/db';
 import { newId } from '../lib/id';
 import { DEFAULT_CARB_TARGET, DEFAULT_FAT_TARGET, gramsToPct, type GramRange, type MacroMode, type MacroRangeSetting } from '../lib/macros';
@@ -44,8 +45,36 @@ function MacroRangeEditor({
         <p className="small muted">Whatever calories are left after protein and the middle of your fat range, shown as a ±15% range.</p>
       ) : (
         <div className="grid-2">
-          <NumField label="Minimum" value={value.min} digits={0} unit={unit} onChange={(v) => v != null && v >= 0 && onChange({ ...value, min: v })} />
-          <NumField label="Maximum" value={value.max} digits={0} unit={unit} onChange={(v) => v != null && v > 0 && onChange({ ...value, max: v })} />
+          <NumberField
+            key={`${value.mode}-min`}
+            label="Minimum"
+            value={value.min}
+            digits={1}
+            unit={unit}
+            rules={{
+              min: 0,
+              max: value.max,
+              required: true,
+              label: 'Minimum',
+              rangeMessage: `Minimum should be 0–${value.max} ${unit} (not above the maximum).`,
+            }}
+            onCommit={(v) => v != null && onChange({ ...value, min: v })}
+          />
+          <NumberField
+            key={`${value.mode}-max`}
+            label="Maximum"
+            value={value.max}
+            digits={1}
+            unit={unit}
+            rules={{
+              min: Math.max(value.min, 1),
+              max: value.mode === 'pct' ? 100 : 1000,
+              required: true,
+              label: 'Maximum',
+              rangeMessage: `Maximum should be ${value.min}–${value.mode === 'pct' ? 100 : 1000} ${unit} (not below the minimum).`,
+            }}
+            onCommit={(v) => v != null && onChange({ ...value, max: v })}
+          />
         </div>
       )}
       <p className="small">

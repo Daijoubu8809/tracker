@@ -1,13 +1,15 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { DateSwitcher } from '../components/DateSwitcher';
-import { Icon, NumField, Segmented, Sheet, TextField } from '../components/ui';
+import { Icon, Segmented, Sheet, TextField } from '../components/ui';
+import { checkAll, NumberField, useNumberField } from '../components/NumberField';
+import { parseNumberInput } from '../lib/numberInput';
 import { useDayExercise, useLifts, useSettings, useWeightKg } from '../hooks';
 import { db, live } from '../lib/db';
 import { addDays, formatDateShort, todayISO, weekStart } from '../lib/dates';
 import { liftKcal, runKcal } from '../lib/energy';
 import { newId } from '../lib/id';
-import { pace, parseDuration, summarizeWeek, type WeekSummary } from '../lib/training';
+import { pace, summarizeWeek, type WeekSummary } from '../lib/training';
 import type { LiftEntry, RunEntry, WorkoutType } from '../lib/types';
 import { lastDuration, liftLabel, nextWorkout, overdueTypes } from '../lib/workouts';
 import { displayDistance, distanceUnit, formatDuration, formatNumber, formatPace, inputDistanceToKm } from '../lib/units';
@@ -18,20 +20,15 @@ export function Training() {
   const s = useSettings();
   const ex = useDayExercise(date);
   const weightKg = useWeightKg(date);
-  const [steps, setSteps] = useState<number | null>(null);
   const [runOpen, setRunOpen] = useState<RunEntry | null>(null);
   const [liftOpen, setLiftOpen] = useState<LiftEntry | null>(null);
-  useEffect(() => setSteps(null), [date]);
-  const shownSteps = steps ?? ex.steps;
   const lifts = useLifts();
   const next = nextWorkout(s.workoutTypes, lifts, date);
   const dist = distanceUnit(s.units);
 
-  const saveSteps = () => {
-    if (steps == null) return;
-    void db.steps.put({ id: date, date, steps: Math.round(steps), updatedAt: Date.now(), deleted: steps <= 0 });
-    toast('Steps saved');
-    setSteps(null);
+  const saveSteps = (steps: number | null) => {
+    void db.steps.put({ id: date, date, steps: steps ?? 0, updatedAt: Date.now(), deleted: !steps });
+    toast(steps ? 'Steps saved' : 'Steps cleared');
   };
 
   return (
@@ -43,14 +40,16 @@ export function Training() {
 
       <section className="card stack" aria-labelledby="steps-h">
         <h2 id="steps-h">Steps</h2>
-        <div className="row" style={{ alignItems: 'flex-end' }}>
-          <div className="grow">
-            <NumField label="Steps today" value={shownSteps} digits={0} placeholder="e.g. 9500" onChange={setSteps} />
-          </div>
-          <button type="button" className="btn primary" disabled={steps == null} onClick={saveSteps}>
-            Save
-          </button>
-        </div>
+        <NumberField
+          key={date}
+          label="Steps this day"
+          value={ex.steps}
+          digits={0}
+          placeholder="e.g. 9500"
+          rules={{ integer: true, min: 0, max: 100000, label: 'Steps' }}
+          onCommit={saveSteps}
+          hint="Saves when you tap Done or leave the field."
+        />
       </section>
 
       <section className="card stack" aria-labelledby="runs-h">
@@ -157,21 +156,35 @@ export function Training() {
 function RunSheet({ run, onClose }: { run: RunEntry; onClose: () => void }) {
   const { units } = useSettings();
   const isNew = run.updatedAt === 0;
-  const [distance, setDistance] = useState<number | null>(isNew ? null : Math.round(displayDistance(run.distanceKm, units) * 100) / 100);
-  const [time, setTime] = useState(isNew ? '' : fmtClock(run.durationMin));
-  const [note, setNote] = useState(run.note);
-  const minutes = parseDuration(time);
-  const p = distance && minutes ? pace(distance, minutes) : null;
   const dist = distanceUnit(units);
+  const distance = useNumberField(
+    isNew ? null : displayDistance(run.distanceKm, units),
+    { min: 0.01, max: units === 'us' ? 100 : 160, required: true, label: 'Distance', unit: dist },
+    2,
+  );
+  const totalSec = Math.round(run.durationMin * 60);
+  const minutes = useNumberField(isNew ? null : Math.floor(totalSec / 60), { integer: true, min: 0, max: 1440, required: true, label: 'Minutes' }, 0);
+  const seconds = useNumberField(isNew ? null : totalSec % 60, { integer: true, min: 0, max: 59, label: 'Seconds' }, 0);
+  const [note, setNote] = useState(run.note);
+  const [timeError, setTimeError] = useState<string | null>(null);
+  // Live pace preview from the drafts (display only; nothing is saved until Save).
+  const d = parseNumberInput(distance.text).value;
+  const m = parseNumberInput(minutes.text, { integer: true }).value;
+  const sec = parseNumberInput(seconds.text, { integer: true }).value ?? 0;
+  const previewMin = m != null ? m + sec / 60 : null;
+  const p = d && previewMin ? pace(d, previewMin) : null;
   return (
     <Sheet title={isNew ? 'Log a run' : 'Edit run'} onClose={onClose}>
+      <NumberField label="Distance" unit={dist} field={distance} />
       <div className="grid-2">
-        <NumField label="Distance" value={distance} digits={2} unit={dist} onChange={setDistance} />
-        <div className="field">
-          <label htmlFor="run-time">Time (min or h:mm:ss)</label>
-          <input id="run-time" className="input num" inputMode="numeric" placeholder="28:30" value={time} onChange={(e) => setTime(e.target.value)} />
-        </div>
+        <NumberField label="Time: minutes" unit="min" placeholder="28" field={minutes} />
+        <NumberField label="Seconds" unit="sec" placeholder="30" field={seconds} />
       </div>
+      {timeError ? (
+        <span className="field-msg" role="status">
+          {timeError}
+        </span>
+      ) : null}
       <div className="banner row between">
         <span>Pace</span>
         <b className="num">{p ? `${formatPace(p)} /${dist}` : '—'}</b>
@@ -193,10 +206,26 @@ function RunSheet({ run, onClose }: { run: RunEntry; onClose: () => void }) {
         <button
           type="button"
           className="btn primary grow"
-          disabled={!distance || !minutes}
           onClick={() => {
-            if (!distance || !minutes) return;
-            void db.runs.put({ ...run, distanceKm: inputDistanceToKm(distance, units), durationMin: minutes, note: note.trim(), updatedAt: Date.now(), deleted: false });
+            const r = checkAll([distance, minutes, seconds]);
+            if (!r.ok) return;
+            const [dv, mv, sv] = r.values;
+            const total = (mv ?? 0) + (sv ?? 0) / 60;
+            if (!(total > 0)) {
+              setTimeError('Time should be more than 0.');
+              return;
+            }
+            setTimeError(null);
+            const timeChanged = minutes.dirty || seconds.dirty || isNew;
+            void db.runs.put({
+              ...run,
+              // Unchanged fields keep their stored value exactly (no mi↔km round-trip).
+              distanceKm: distance.dirty || isNew ? inputDistanceToKm(dv!, units) : run.distanceKm,
+              durationMin: timeChanged ? total : run.durationMin,
+              note: note.trim(),
+              updatedAt: Date.now(),
+              deleted: false,
+            });
             onClose();
           }}
         >
@@ -207,31 +236,19 @@ function RunSheet({ run, onClose }: { run: RunEntry; onClose: () => void }) {
   );
 }
 
-function fmtClock(min: number): string {
-  const total = Math.round(min * 60);
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  const ss = String(s).padStart(2, '0');
-  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
-}
-
 function LiftSheet({ lift, onClose }: { lift: LiftEntry; onClose: () => void }) {
   const { workoutTypes } = useSettings();
   const lifts = useLifts();
   const isNew = lift.updatedAt === 0;
   const [draft, setDraft] = useState(lift);
   const [durationTouched, setDurationTouched] = useState(!isNew);
+  const duration = useNumberField(lift.durationMin, { integer: true, min: 1, max: 300, required: true, label: 'Duration', unit: 'min' }, 0);
   // An old log whose type was deleted (or a v1 type like "Upper") stays selectable so saving keeps its label.
   const orphan = !workoutTypes.some((t) => t.id === draft.typeId) ? { id: draft.typeId ?? '__orphan', name: draft.typeName } : null;
   const pick = (t: WorkoutType) => {
     const remembered = lastDuration(t, lifts);
-    setDraft({
-      ...draft,
-      typeId: t.id,
-      typeName: t.name,
-      durationMin: !durationTouched && remembered ? remembered : draft.durationMin,
-    });
+    setDraft({ ...draft, typeId: t.id, typeName: t.name });
+    if (!durationTouched && !duration.dirty && remembered) duration.reset(remembered);
   };
   const current = workoutTypes.find((t) => t.id === draft.typeId);
   return (
@@ -249,26 +266,17 @@ function LiftSheet({ lift, onClose }: { lift: LiftEntry; onClose: () => void }) 
         ) : null}
       </div>
       {!workoutTypes.length ? <p className="small muted">Add workout types in Settings → Training.</p> : null}
-      <NumField
-        label="Duration"
-        value={draft.durationMin}
-        digits={0}
-        unit="min"
-        onChange={(v) => {
-          setDurationTouched(true);
-          setDraft({ ...draft, durationMin: v ?? 0 });
-        }}
-      />
+      <NumberField label="Duration" unit="min" field={duration} />
       <div className="chips">
         {[30, 45, 60, 75, 90].map((m) => (
           <button
             key={m}
             type="button"
             className="chip"
-            aria-pressed={draft.durationMin === m}
+            aria-pressed={duration.text.trim() === String(m)}
             onClick={() => {
               setDurationTouched(true);
-              setDraft({ ...draft, durationMin: m });
+              duration.reset(m);
             }}
           >
             {m} min
@@ -292,10 +300,13 @@ function LiftSheet({ lift, onClose }: { lift: LiftEntry; onClose: () => void }) 
         <button
           type="button"
           className="btn primary grow"
-          disabled={draft.durationMin <= 0 || (!current && !orphan)}
+          disabled={!current && !orphan}
           onClick={() => {
+            const r = checkAll([duration]);
+            if (!r.ok || r.values[0] == null) return;
             void db.lifts.put({
               ...draft,
+              durationMin: r.values[0],
               typeName: current?.name ?? draft.typeName,
               note: draft.note.trim(),
               updatedAt: Date.now(),

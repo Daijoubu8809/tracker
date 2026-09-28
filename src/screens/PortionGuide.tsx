@@ -1,4 +1,4 @@
-import { NumField } from '../components/ui';
+import { NumberField } from '../components/NumberField';
 import { useSettings } from '../hooks';
 import { saveSettings } from '../lib/db';
 import { DEFAULT_PORTION_REFS } from '../lib/defaults';
@@ -62,23 +62,23 @@ export function PortionGuide() {
   );
 }
 
-const REF_FIELDS: { key: keyof PortionRefs; label: string; unit: string }[] = [
-  { key: 'plateFullCups', label: 'Full plate of starch/veg', unit: 'cups' },
-  { key: 'plateFullMeatOz', label: 'Full plate of meat', unit: 'oz' },
-  { key: 'palmOz', label: 'Palm of meat', unit: 'oz' },
-  { key: 'fistCups', label: 'Fist', unit: 'cups' },
-  { key: 'cuppedHandCups', label: 'Cupped hand', unit: 'cups' },
-  { key: 'thumbTbsp', label: 'Thumb', unit: 'tbsp' },
-  { key: 'scoopCups', label: 'Serving scoop', unit: 'cups' },
-  { key: 'ladleCups', label: 'Ladle', unit: 'cups' },
-  { key: 'bowlCups', label: 'Bowl', unit: 'cups' },
-  { key: 'clamshellCups', label: 'Clamshell (full)', unit: 'cups' },
+const REF_FIELDS: { key: keyof PortionRefs; label: string; unit: string; min: number; max: number }[] = [
+  { key: 'plateFullCups', label: 'Full plate of starch/veg', unit: 'cups', min: 1, max: 6 },
+  { key: 'plateFullMeatOz', label: 'Full plate of meat', unit: 'oz', min: 6, max: 32 },
+  { key: 'palmOz', label: 'Palm of meat', unit: 'oz', min: 2, max: 8 },
+  { key: 'fistCups', label: 'Fist', unit: 'cups', min: 0.5, max: 2 },
+  { key: 'cuppedHandCups', label: 'Cupped hand', unit: 'cups', min: 0.25, max: 1 },
+  { key: 'thumbTbsp', label: 'Thumb', unit: 'tbsp', min: 0.5, max: 3 },
+  { key: 'scoopCups', label: 'Serving scoop', unit: 'cups', min: 0.25, max: 1.5 },
+  { key: 'ladleCups', label: 'Ladle', unit: 'cups', min: 0.25, max: 1.5 },
+  { key: 'bowlCups', label: 'Bowl', unit: 'cups', min: 1, max: 4 },
+  { key: 'clamshellCups', label: 'Clamshell (full)', unit: 'cups', min: 1.5, max: 6 },
 ];
 
 export function PortionRefsEditor() {
   const { portionRefs } = useSettings();
   const set = (key: keyof PortionRefs, v: number | null) => {
-    if (v == null || v <= 0) return;
+    if (v == null) return;
     void saveSettings({ portionRefs: { ...portionRefs, [key]: v } });
   };
   return (
@@ -87,7 +87,15 @@ export function PortionRefsEditor() {
       <p className="small muted">Adjust if your dining hall’s plates, scoops or your hands are bigger or smaller.</p>
       <div className="grid-2">
         {REF_FIELDS.map((f) => (
-          <NumField key={f.key} label={f.label} value={portionRefs[f.key]} digits={2} unit={f.unit} onChange={(v) => set(f.key, v)} />
+          <NumberField
+            key={f.key}
+            label={f.label}
+            value={portionRefs[f.key]}
+            digits={2}
+            unit={f.unit}
+            rules={{ min: f.min, max: f.max, required: true, label: f.label, unit: f.unit }}
+            onCommit={(v) => set(f.key, v)}
+          />
         ))}
       </div>
       <button type="button" className="btn small" onClick={() => void saveSettings({ portionRefs: { ...DEFAULT_PORTION_REFS } })}>

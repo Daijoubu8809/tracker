@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, NumField } from '../components/ui';
+import { Check } from '../components/ui';
+import { NumberField } from '../components/NumberField';
 import { buildPrompt, claudeItemToFood, claudeItemToLogged, parseClaudeReply, type ClaudeItem } from '../lib/claudeImport';
 import { MEAL_LABEL } from '../lib/log';
 import { roundRange, sumItems } from '../lib/portions';
@@ -247,10 +248,17 @@ export function PasteFromClaude() {
               <details>
                 <summary>Edit numbers</summary>
                 <div className="grid-2">
-                  <NumField label="Calories" value={d.item.calories} digits={0} unit="kcal" onChange={(v) => updateItem(i, { calories: v ?? 0 })} />
-                  <NumField label="Protein" value={d.item.protein} unit="g" onChange={(v) => updateItem(i, { protein: v ?? 0 })} />
-                  <NumField label="Carbs" value={d.item.carbs} unit="g" onChange={(v) => updateItem(i, { carbs: v ?? 0 })} />
-                  <NumField label="Fat" value={d.item.fat} unit="g" onChange={(v) => updateItem(i, { fat: v ?? 0 })} />
+                  <NumberField
+                    label="Calories"
+                    unit="kcal"
+                    value={d.item.calories}
+                    digits={0}
+                    rules={{ min: 0, max: 10000, required: true, label: 'Calories', unit: 'kcal' }}
+                    onCommit={(v) => v != null && updateItem(i, { calories: v })}
+                  />
+                  <NumberField label="Protein" unit="g" value={d.item.protein} digits={1} rules={{ min: 0, max: 1000, label: 'Protein', unit: 'g' }} onCommit={(v) => updateItem(i, { protein: v ?? 0 })} />
+                  <NumberField label="Carbs" unit="g" value={d.item.carbs} digits={1} rules={{ min: 0, max: 1000, label: 'Carbs', unit: 'g' }} onCommit={(v) => updateItem(i, { carbs: v ?? 0 })} />
+                  <NumberField label="Fat" unit="g" value={d.item.fat} digits={1} rules={{ min: 0, max: 1000, label: 'Fat', unit: 'g' }} onCommit={(v) => updateItem(i, { fat: v ?? 0 })} />
                 </div>
               </details>
               {d.item.saveAs ? (

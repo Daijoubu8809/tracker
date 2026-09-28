@@ -57,8 +57,22 @@ export function formatPace(minPerUnit: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+/** 60 → "1h 0m", 45 → "45 min", 28.5 → "28:30" (keeps seconds instead of rounding them away). */
 export function formatDuration(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = Math.round(min % 60);
-  return h > 0 ? `${h}h ${m}m` : `${m} min`;
+  const total = Math.round(min * 60);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return s ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${h}h ${m}m`;
+  return s ? `${m}:${String(s).padStart(2, '0')}` : `${m} min`;
+}
+
+/** Sensible body-weight input range in the user's unit. */
+export function weightRules(u: UnitSystem, label = 'Weight') {
+  return u === 'us' ? { min: 66, max: 660, label, unit: 'lb' } : { min: 30, max: 300, label, unit: 'kg' };
+}
+
+/** Waist input range in the user's unit. */
+export function waistRules(u: UnitSystem) {
+  return u === 'us' ? { min: 20, max: 70, label: 'Waist', unit: 'in' } : { min: 50, max: 180, label: 'Waist', unit: 'cm' };
 }

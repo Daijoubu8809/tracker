@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { Check, Icon, NumField, Segmented, SelectField, Sheet, TextField } from '../components/ui';
+import { Check, Icon, Segmented, SelectField, Sheet, TextField } from '../components/ui';
+import { checkAll, NumberField, useNumberField } from '../components/NumberField';
+import { HeightField } from '../components/HeightField';
+import type { NumberRules } from '../lib/numberInput';
 import { saveSettings } from '../lib/db';
 import { GOAL_DEFAULT_KCAL } from '../lib/defaults';
 import { ACTIVITY, FORMULA_LABEL, goalLabel } from '../lib/energy';
 import { addDays, formatDateShort, todayISO } from '../lib/dates';
 import { newId } from '../lib/id';
 import type { ActivityLevel, BmrFormula, GoalMode, GoalSpec, Phase, Settings as SettingsT } from '../lib/types';
-import { cmToIn, displayWeight, inToCm, inputWeightToKg, round, weightUnit } from '../lib/units';
+import { displayWeight, inputWeightToKg, weightUnit } from '../lib/units';
 import { useSettings, useTargets } from '../hooks';
 import { useApp } from '../state';
 import { PortionRefsEditor } from './PortionGuide';
@@ -28,13 +31,44 @@ function goalKcalLabel(mode: GoalMode): string {
     case 'bulk':
       return 'Surplus';
     case 'maintain':
-      return 'Offset (optional, e.g. −250)';
+      return 'Offset (optional, e.g. 250)';
     case 'custom':
       return 'Daily calories';
   }
 }
 
+/** Allowed range for the goal's kcal number, per mode. */
+export function goalKcalRules(mode: GoalMode): NumberRules {
+  switch (mode) {
+    case 'cut':
+      return { integer: true, min: 0, max: 1500, required: true, label: 'Deficit', unit: 'kcal' };
+    case 'bulk':
+      return { integer: true, min: 0, max: 1500, required: true, label: 'Surplus', unit: 'kcal' };
+    case 'maintain':
+      return { integer: true, min: 0, max: 1000, label: 'Offset', unit: 'kcal' };
+    case 'custom':
+      return { integer: true, min: 1000, max: 6000, required: true, label: 'Daily calories', unit: 'kcal' };
+  }
+}
+
+/** Maintain offsets can be negative, but iPhone number keypads have no minus key — so it's a toggle. */
+function OffsetSign({ negative, onChange }: { negative: boolean; onChange: (negative: boolean) => void }) {
+  return (
+    <Segmented
+      label="Offset direction"
+      options={[
+        { value: 'below', label: 'Below maintenance' },
+        { value: 'above', label: 'Above maintenance' },
+      ]}
+      value={negative ? 'below' : 'above'}
+      onChange={(v) => onChange(v === 'below')}
+    />
+  );
+}
+
+/** Default goal (autosaves each field on blur). */
 export function GoalEditor({ goal, onChange }: { goal: GoalSpec; onChange: (g: GoalSpec) => void }) {
+  const negative = goal.mode === 'maintain' && goal.kcal < 0;
   return (
     <div className="stack">
       <Segmented
@@ -43,7 +77,16 @@ export function GoalEditor({ goal, onChange }: { goal: GoalSpec; onChange: (g: G
         value={goal.mode}
         onChange={(mode) => onChange({ mode, kcal: GOAL_DEFAULT_KCAL[mode] })}
       />
-      <NumField label={goalKcalLabel(goal.mode)} value={goal.kcal} digits={0} unit="kcal" onChange={(v) => onChange({ ...goal, kcal: v ?? 0 })} />
+      {goal.mode === 'maintain' ? <OffsetSign negative={negative} onChange={(neg) => onChange({ ...goal, kcal: neg ? -Math.abs(goal.kcal) : Math.abs(goal.kcal) })} /> : null}
+      <NumberField
+        key={goal.mode}
+        label={goalKcalLabel(goal.mode)}
+        value={Math.abs(goal.kcal)}
+        digits={0}
+        unit="kcal"
+        rules={goalKcalRules(goal.mode)}
+        onCommit={(v) => onChange({ ...goal, kcal: (negative ? -1 : 1) * (v ?? 0) })}
+      />
     </div>
   );
 }
@@ -54,10 +97,6 @@ export function Settings() {
   const t = useTargets(date);
   const save = (patch: Partial<SettingsT>) => void saveSettings(patch);
   const saveProfile = (patch: Partial<SettingsT['profile']>) => save({ profile: { ...s.profile, ...patch } });
-  const us = s.units === 'us';
-  const totalIn = cmToIn(s.profile.heightCm);
-  const ft = Math.floor(totalIn / 12);
-  const inch = round(totalIn - ft * 12, 1);
 
   return (
     <div className="page">
@@ -77,7 +116,14 @@ export function Settings() {
           onChange={(units) => save({ units })}
         />
         <div className="grid-2">
-          <NumField label="Age" value={s.profile.age} digits={0} unit="yr" onChange={(v) => v && saveProfile({ age: v })} />
+          <NumberField
+            label="Age"
+            value={s.profile.age}
+            digits={0}
+            unit="yr"
+            rules={{ integer: true, min: 13, max: 100, required: true, label: 'Age', unit: 'years' }}
+            onCommit={(v) => v != null && saveProfile({ age: v })}
+          />
           <SelectField
             label="Sex"
             value={s.profile.sex}
@@ -88,27 +134,29 @@ export function Settings() {
             onChange={(sex) => saveProfile({ sex })}
           />
         </div>
-        {us ? (
-          <div className="grid-2">
-            <NumField label="Height (feet)" value={ft} digits={0} unit="ft" onChange={(v) => v != null && saveProfile({ heightCm: inToCm(v * 12 + inch) })} />
-            <NumField label="Height (inches)" value={inch} unit="in" onChange={(v) => v != null && saveProfile({ heightCm: inToCm(ft * 12 + v) })} />
-          </div>
-        ) : (
-          <NumField label="Height" value={s.profile.heightCm} unit="cm" onChange={(v) => v && saveProfile({ heightCm: v })} />
-        )}
+        <HeightField cm={s.profile.heightCm} units={s.units} onCommit={(heightCm) => saveProfile({ heightCm })} />
         <div className="grid-2">
-          <NumField
+          <NumberField
             label="Starting weight"
             value={displayWeight(s.profile.weightKg, s.units)}
+            digits={1}
             unit={weightUnit(s.units)}
-            onChange={(v) => v && saveProfile({ weightKg: inputWeightToKg(v, s.units) })}
+            rules={s.units === 'us' ? { min: 66, max: 660, required: true, label: 'Weight', unit: 'lb' } : { min: 30, max: 300, required: true, label: 'Weight', unit: 'kg' }}
+            onCommit={(v) => v != null && saveProfile({ weightKg: inputWeightToKg(v, s.units) })}
           />
-          <NumField
+          <NumberField
             label="Body fat (optional)"
             value={s.profile.bodyFatPct}
+            digits={1}
             unit="%"
-            onChange={(v) => saveProfile({ bodyFatPct: v && v > 0 && v < 70 ? v : null })}
+            rules={{ min: 3, max: 60, label: 'Body fat', unit: '%' }}
+            onCommit={(v) => saveProfile({ bodyFatPct: v })}
           />
+        </div>
+        <div className="banner small num" aria-live="polite" data-testid="profile-targets">
+          BMR <b>{Math.round(t.bmr.bmr).toLocaleString()}</b> · maintenance <b>{Math.round(t.maintenance).toLocaleString()}</b> · target{' '}
+          <b>{t.calories.toLocaleString()} kcal</b> · protein <b>{t.macros.proteinG} g</b> · carbs <b>{t.macros.carbs.min}–{t.macros.carbs.max} g</b> ·
+          fat <b>{t.macros.fat.min}–{t.macros.fat.max} g</b>
         </div>
         <p className="small muted">Once you log weigh-ins, your latest weight is used instead of the starting weight.</p>
       </section>
@@ -185,12 +233,13 @@ export function Settings() {
 
       <section className="card stack" aria-labelledby="macro-h">
         <h2 id="macro-h">Goals: protein, carbs & fat</h2>
-        <NumField
+        <NumberField
           label="Protein per lb of body weight"
           value={s.proteinPerLb}
           digits={2}
           unit="g/lb"
-          onChange={(v) => v != null && v > 0 && save({ proteinPerLb: v })}
+          rules={{ min: 0.3, max: 1.5, required: true, label: 'Protein', unit: 'g/lb' }}
+          onCommit={(v) => v != null && save({ proteinPerLb: v })}
         />
         <p className="small muted">Currently {t.proteinG} g/day (a single target).</p>
         <MacroTargetsEditor settings={s} calories={t.calories} fat={t.macros.fat} carbs={t.macros.carbs} />
@@ -261,7 +310,6 @@ function PhasesEditor({ settings }: { settings: SettingsT }) {
     });
   };
 
-  const overlaps = (p: Phase) => settings.phases.some((q) => q.id !== p.id && p.startDate <= q.endDate && q.startDate <= p.endDate);
 
   return (
     <div className="stack">
@@ -293,49 +341,101 @@ function PhasesEditor({ settings }: { settings: SettingsT }) {
         </ul>
       )}
       {editing ? (
-        <Sheet title="Phase" onClose={() => setEditing(null)}>
-          <TextField label="Name" value={editing.name} onChange={(name) => setEditing({ ...editing, name })} />
-          <div className="grid-2">
-            <TextField label="Start" type="date" value={editing.startDate} onChange={(startDate) => setEditing({ ...editing, startDate })} />
-            <TextField label="End (inclusive)" type="date" value={editing.endDate} onChange={(endDate) => setEditing({ ...editing, endDate })} />
-          </div>
-          <GoalEditor goal={editing.goal} onChange={(goal) => setEditing({ ...editing, goal })} />
-          <NumField
-            label="Goal weight (optional, for progress)"
-            value={editing.targetWeightKg == null ? null : displayWeight(editing.targetWeightKg, settings.units)}
-            unit={weightUnit(settings.units)}
-            onChange={(v) => setEditing({ ...editing, targetWeightKg: v ? inputWeightToKg(v, settings.units) : null })}
-          />
-          {editing.endDate < editing.startDate ? <div className="banner warn">End date is before start date.</div> : null}
-          {overlaps(editing) ? <div className="banner warn">This overlaps another phase; the earlier one wins on shared days.</div> : null}
-          <div className="row">
-            {settings.phases.some((p) => p.id === editing.id) ? (
-              <button
-                type="button"
-                className="btn danger"
-                onClick={() => {
-                  savePhases(settings.phases.filter((p) => p.id !== editing.id));
-                  setEditing(null);
-                }}
-              >
-                Delete
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="btn primary grow"
-              disabled={editing.endDate < editing.startDate || !editing.name.trim()}
-              onClick={() => {
-                const rest = settings.phases.filter((p) => p.id !== editing.id);
-                savePhases([...rest, editing].sort((a, b) => a.startDate.localeCompare(b.startDate)));
-                setEditing(null);
-              }}
-            >
-              Save phase
-            </button>
-          </div>
-        </Sheet>
+        <PhaseSheet
+          phase={editing}
+          settings={settings}
+          isExisting={settings.phases.some((p) => p.id === editing.id)}
+          onClose={() => setEditing(null)}
+          onDelete={() => {
+            savePhases(settings.phases.filter((p) => p.id !== editing.id));
+            setEditing(null);
+          }}
+          onSave={(phase) => {
+            const rest = settings.phases.filter((p) => p.id !== phase.id);
+            savePhases([...rest, phase].sort((a, b) => a.startDate.localeCompare(b.startDate)));
+            setEditing(null);
+          }}
+        />
       ) : null}
     </div>
   );
 }
+
+function PhaseSheet({
+  phase,
+  settings,
+  isExisting,
+  onClose,
+  onDelete,
+  onSave,
+}: {
+  phase: Phase;
+  settings: SettingsT;
+  isExisting: boolean;
+  onClose: () => void;
+  onDelete: () => void;
+  onSave: (p: Phase) => void;
+}) {
+  const [draft, setDraft] = useState(phase);
+  const mode = draft.goal.mode;
+  const [negative, setNegative] = useState(phase.goal.mode === 'maintain' && phase.goal.kcal < 0);
+  const kcal = useNumberField(Math.abs(phase.goal.kcal), goalKcalRules(mode), 0);
+  const us = settings.units === 'us';
+  const weight = useNumberField(
+    phase.targetWeightKg == null ? null : displayWeight(phase.targetWeightKg, settings.units),
+    us ? { min: 66, max: 660, label: 'Goal weight', unit: 'lb' } : { min: 30, max: 300, label: 'Goal weight', unit: 'kg' },
+    1,
+  );
+  const overlaps = settings.phases.some((q) => q.id !== draft.id && draft.startDate <= q.endDate && q.startDate <= draft.endDate);
+  return (
+    <Sheet title="Phase" onClose={onClose}>
+      <TextField label="Name" value={draft.name} onChange={(name) => setDraft({ ...draft, name })} />
+      <div className="grid-2">
+        <TextField label="Start" type="date" value={draft.startDate} onChange={(startDate) => setDraft({ ...draft, startDate })} />
+        <TextField label="End (inclusive)" type="date" value={draft.endDate} onChange={(endDate) => setDraft({ ...draft, endDate })} />
+      </div>
+      <Segmented
+        label="Goal mode"
+        options={GOAL_OPTIONS}
+        value={mode}
+        onChange={(m) => {
+          setDraft({ ...draft, goal: { mode: m, kcal: GOAL_DEFAULT_KCAL[m] } });
+          setNegative(false);
+          kcal.reset(GOAL_DEFAULT_KCAL[m]);
+        }}
+      />
+      {mode === 'maintain' ? <OffsetSign negative={negative} onChange={setNegative} /> : null}
+      <NumberField label={goalKcalLabel(mode)} unit="kcal" field={kcal} />
+      <NumberField label="Goal weight (optional, for progress)" unit={weightUnit(settings.units)} field={weight} />
+      {draft.endDate < draft.startDate ? <div className="banner warn">End date is before start date.</div> : null}
+      {overlaps ? <div className="banner warn">This overlaps another phase; the earlier one wins on shared days.</div> : null}
+      <div className="row">
+        {isExisting ? (
+          <button type="button" className="btn danger" onClick={onDelete}>
+            Delete
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="btn primary grow"
+          disabled={draft.endDate < draft.startDate || !draft.name.trim()}
+          onClick={() => {
+            const r = checkAll([kcal, weight]);
+            if (!r.ok) return;
+            const [k, w] = r.values;
+            onSave({
+              ...draft,
+              name: draft.name.trim(),
+              goal: { mode, kcal: (mode === 'maintain' && negative ? -1 : 1) * (k ?? 0) },
+              // Only convert the weight if it was edited, so an untouched value never drifts.
+              targetWeightKg: weight.dirty ? (w == null ? null : inputWeightToKg(w, settings.units)) : phase.targetWeightKg,
+            });
+          }}
+        >
+          Save phase
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+

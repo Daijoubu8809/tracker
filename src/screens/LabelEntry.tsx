@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { Check, NumField, TextField } from '../components/ui';
+import { Check, TextField } from '../components/ui';
+import { checkAll, NumberField, useNumberField } from '../components/NumberField';
+import { NutritionInputs, nutritionFrom, useNutritionFields } from '../components/NutritionFields';
+import { parseNumberInput } from '../lib/numberInput';
 import { labelToFood, labelToItem, parseAmount, type LabelInput } from '../lib/label';
 import { MEAL_LABEL } from '../lib/log';
 import { useApp } from '../state';
@@ -17,41 +20,49 @@ export interface LabelPrefill {
   fat?: number;
 }
 
-const EMPTY = {
-  name: '',
-  servingText: '',
-  servingGrams: null as number | null,
-  servingsPerContainer: null as number | null,
-  calories: null as number | null,
-  protein: null as number | null,
-  carbs: null as number | null,
-  fat: null as number | null,
-};
-
 export function LabelEntry() {
   const { logMeal, toast } = useApp();
   const logItems = useLogItems();
-  const [f, setF] = useState(EMPTY);
-  const [eatenText, setEatenText] = useState('1');
+  const [name, setName] = useState('');
+  const [servingText, setServingText] = useState('');
+  const servingGrams = useNumberField(null, { min: 1, max: 5000, label: 'Serving weight', unit: 'g' }, 1);
+  const nutrition = useNutritionFields(null, 5000);
+  const perContainer = useNumberField(null, { min: 0.1, max: 500, label: 'Servings per container' }, 2);
+  // Servings eaten: decimals ("1.5") or fractions ("1 1/2") — the chips cover ½, 1½ on phones.
+  const eaten = useNumberField(1, { min: 0.01, max: 100, required: true, label: 'Servings', parse: (t) => parseAmount(t) ?? parseNumberInput(t).value }, 2);
   const [saveCustom, setSaveCustom] = useState(true);
-  const eaten = parseAmount(eatenText);
-  const valid = f.name.trim() && f.calories != null && eaten != null;
+  const [nameError, setNameError] = useState<string | null>(null);
 
-  const input = (): LabelInput => ({
-    name: f.name,
-    servingText: f.servingText,
-    servingGrams: f.servingGrams,
-    servingsPerContainer: f.servingsPerContainer,
-    calories: f.calories ?? 0,
-    protein: f.protein ?? 0,
-    carbs: f.carbs ?? 0,
-    fat: f.fat ?? 0,
-    servingsEaten: eaten ?? 1,
-  });
+  // Live preview from the drafts (display only; nothing is saved until you tap Log).
+  const draftCal = parseNumberInput(nutrition.kcal.text).value;
+  const draftEaten = parseAmount(eaten.text) ?? parseNumberInput(eaten.text).value;
+  const draftPer = parseNumberInput(perContainer.text).value;
+
+  const reset = () => {
+    setName('');
+    setServingText('');
+    [servingGrams, perContainer, ...nutrition.all].forEach((x) => x.reset(null));
+    eaten.reset(1);
+  };
 
   const submit = async () => {
-    if (!valid) return;
-    const l = input();
+    const r = checkAll([servingGrams, perContainer, eaten, ...nutrition.all]);
+    const nameOk = !!name.trim();
+    setNameError(nameOk ? null : 'Enter a food name.');
+    if (!r.ok || !nameOk) return;
+    const [g, per, ate, ...macros] = r.values;
+    const n = nutritionFrom(macros);
+    const l: LabelInput = {
+      name,
+      servingText,
+      servingGrams: g,
+      servingsPerContainer: per,
+      calories: n.kcal,
+      protein: n.protein,
+      carbs: n.carbs,
+      fat: n.fat,
+      servingsEaten: ate ?? 1,
+    };
     let foodId: string | null = null;
     if (saveCustom) {
       const food = labelToFood(l);
@@ -60,66 +71,63 @@ export function LabelEntry() {
     }
     await logItems([labelToItem(l, foodId)]);
     if (saveCustom) toast(`Saved “${l.name.trim()}” to your foods and logged it`);
-    setF(EMPTY);
-    setEatenText('1');
+    reset();
   };
-
-  const preview = valid ? labelToItem(input(), null) : null;
 
   return (
     <div className="stack">
       <BarcodeButton
-        onFound={(p) =>
-          setF({
-            ...f,
-            name: p.name ?? f.name,
-            servingText: p.servingText ?? f.servingText,
-            servingGrams: p.servingGrams ?? f.servingGrams,
-            calories: p.calories ?? f.calories,
-            protein: p.protein ?? f.protein,
-            carbs: p.carbs ?? f.carbs,
-            fat: p.fat ?? f.fat,
-          })
-        }
+        onFound={(p) => {
+          if (p.name) setName(p.name);
+          if (p.servingText) setServingText(p.servingText);
+          if (p.servingGrams != null) servingGrams.reset(p.servingGrams);
+          if (p.calories != null) nutrition.kcal.reset(p.calories);
+          if (p.protein != null) nutrition.protein.reset(p.protein);
+          if (p.carbs != null) nutrition.carbs.reset(p.carbs);
+          if (p.fat != null) nutrition.fat.reset(p.fat);
+        }}
       />
-      <TextField label="Food name" value={f.name} placeholder="e.g. Clif Bar, chocolate chip" onChange={(name) => setF({ ...f, name })} />
+      <TextField label="Food name" value={name} placeholder="e.g. Clif Bar, chocolate chip" onChange={setName} />
+      {nameError && !name.trim() ? (
+        <span className="field-msg" role="status">
+          {nameError}
+        </span>
+      ) : null}
       <div className="grid-2">
-        <TextField label="Serving size" value={f.servingText} placeholder="e.g. 1 bar" onChange={(servingText) => setF({ ...f, servingText })} />
-        <NumField label="Serving weight (optional)" value={f.servingGrams} digits={0} unit="g" onChange={(servingGrams) => setF({ ...f, servingGrams })} />
+        <TextField label="Serving size" value={servingText} placeholder="e.g. 1 bar" onChange={setServingText} />
+        <NumberField label="Serving weight (optional)" unit="g" field={servingGrams} />
       </div>
       <p className="small muted">Numbers per serving, as printed on the label:</p>
-      <div className="grid-2">
-        <NumField label="Calories" value={f.calories} digits={0} unit="kcal" onChange={(calories) => setF({ ...f, calories })} />
-        <NumField label="Protein" value={f.protein} unit="g" onChange={(protein) => setF({ ...f, protein })} />
-        <NumField label="Total carbs" value={f.carbs} unit="g" onChange={(carbs) => setF({ ...f, carbs })} />
-        <NumField label="Total fat" value={f.fat} unit="g" onChange={(fat) => setF({ ...f, fat })} />
-      </div>
-      <NumField label="Servings per container (optional)" value={f.servingsPerContainer} onChange={(servingsPerContainer) => setF({ ...f, servingsPerContainer })} />
-      <div className="field">
-        <label htmlFor="servings-eaten">Servings I ate (fractions OK: ½, 1 1/2)</label>
-        <input id="servings-eaten" className="input num" inputMode="decimal" value={eatenText} onChange={(e) => setEatenText(e.target.value)} />
-        {eaten == null ? <span className="small" style={{ color: 'var(--danger)' }}>Enter an amount like 1, 1.5 or 1/2.</span> : null}
-      </div>
+      <NutritionInputs f={nutrition} macroLabels={['Protein', 'Total carbs', 'Total fat']} />
+      <NumberField label="Servings per container (optional)" field={perContainer} />
+      <NumberField label="Servings I ate" field={eaten} hint="Decimals or fractions, e.g. 1.5 or 1 1/2" />
       <div className="chips">
-        {['1/2', '1', '1 1/2', '2'].map((v) => (
-          <button key={v} type="button" className="chip" aria-pressed={eatenText === v} onClick={() => setEatenText(v)}>
-            {v.replace('1/2', '½').replace('1 ½', '1½')}
+        {[
+          ['0.5', '½'],
+          ['1', '1'],
+          ['1.5', '1½'],
+          ['2', '2'],
+        ].map(([v, label]) => (
+          <button key={v} type="button" className="chip" aria-pressed={eaten.text.trim() === v} onClick={() => eaten.reset(Number(v))}>
+            {label}
           </button>
         ))}
-        {f.servingsPerContainer ? (
-          <button type="button" className="chip" onClick={() => setEatenText(String(f.servingsPerContainer))}>
-            Whole container ({f.servingsPerContainer})
+        {draftPer ? (
+          <button type="button" className="chip" onClick={() => eaten.reset(draftPer)}>
+            Whole container ({draftPer})
           </button>
         ) : null}
       </div>
       <Check label="Save as a custom food for next time" checked={saveCustom} onChange={setSaveCustom} />
-      {preview ? (
+      {draftCal != null && draftEaten != null ? (
         <div className="banner row between">
-          <span>{preview.portionText}</span>
-          <b className="num">{preview.kcal} kcal</b>
+          <span>
+            {Math.round(draftEaten * 100) / 100} × {servingText.trim() || 'serving'}
+          </span>
+          <b className="num">{Math.round(draftCal * draftEaten)} kcal</b>
         </div>
       ) : null}
-      <button type="button" className="btn primary big block" disabled={!valid} onClick={() => void submit()}>
+      <button type="button" className="btn primary big block" onClick={() => void submit()}>
         Log to {MEAL_LABEL[logMeal]}
       </button>
     </div>

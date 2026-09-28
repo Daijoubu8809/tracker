@@ -140,6 +140,8 @@ function ScannerSheet({ onClose, onFound }: { onClose: () => void; onFound: (p: 
           <input
             id="barcode-typed"
             className="input num grow"
+            // A barcode is an ID (digits + spaces), not a quantity — not a NumberField.
+            data-code-input="barcode"
             inputMode="numeric"
             autoComplete="off"
             placeholder="e.g. 0 49000 02890 4"

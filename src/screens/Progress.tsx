@@ -1,14 +1,15 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo, useState } from 'react';
 import { BandChart, IntakeChart, TrendChart, type BandDatum } from '../components/Charts';
-import { NumField, Segmented, Sheet, TextField } from '../components/ui';
+import { Segmented, Sheet, TextField } from '../components/ui';
+import { checkAll, NumberField, useNumberField } from '../components/NumberField';
 import { useAdaptive, useEntriesRange, useSettings, useTargets, useWaists, useWeightKg, useWeights } from '../hooks';
 import { db, live } from '../lib/db';
 import { activePhase, computeTargets } from '../lib/energy';
 import { addDays, dateRange, formatDateShort, todayISO } from '../lib/dates';
 import { emaTrend, phaseProgress, weeklyRate } from '../lib/trend';
 import type { ISODate } from '../lib/types';
-import { displayLength, displayWeight, inputLengthToCm, kgToLb, lengthUnit, weightUnit } from '../lib/units';
+import { displayLength, displayWeight, inputLengthToCm, kgToLb, lengthUnit, waistRules, weightUnit } from '../lib/units';
 import { QuickWeighIn } from './Body';
 import { AdaptiveCard } from './AdaptiveCard';
 import { WeeklySummary } from './Training';
@@ -175,17 +176,18 @@ function IntakeCard() {
 function WaistSheet({ onClose }: { onClose: () => void }) {
   const { units } = useSettings();
   const [date, setDate] = useState(todayISO());
-  const [v, setV] = useState<number | null>(null);
+  const waist = useNumberField(null, { ...waistRules(units), required: true }, 1);
   return (
     <Sheet title="Waist measurement" onClose={onClose}>
       <TextField label="Date" type="date" value={date} onChange={(d) => d && setDate(d)} />
-      <NumField label="Waist at navel" value={v} unit={lengthUnit(units)} onChange={setV} />
+      <NumberField label="Waist at navel" unit={lengthUnit(units)} field={waist} />
       <button
         type="button"
         className="btn primary big block"
-        disabled={!v || v <= 0}
         onClick={() => {
-          if (v) void db.waists.put({ id: date, date, cm: inputLengthToCm(v, units), updatedAt: Date.now() });
+          const r = checkAll([waist]);
+          if (!r.ok || r.values[0] == null) return;
+          void db.waists.put({ id: date, date, cm: inputLengthToCm(r.values[0], units), updatedAt: Date.now() });
           onClose();
         }}
       >

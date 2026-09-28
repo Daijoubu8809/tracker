@@ -109,6 +109,13 @@ It never crashes, and it never quietly skips an item.
 **Barcode scanning:** Log → Label → **Scan barcode** uses your camera and the free Open Food Facts database to fill in the
 label form. If the camera isn’t available, type the barcode number instead.
 
+## Typing numbers
+
+Every number field is a plain text box with the number keypad. You can type freely ("1", "17", "5.", ".5"), and nothing is
+checked or saved until you leave the field, tap **Done**, or tap **Save**. If a value is out of range, the field keeps what you
+typed and shows a short note (e.g. "Height should be 120–230 cm") instead of saving it. Height is stored in cm; in US units it
+shows as separate **ft** and **in** fields (inches can be decimals like 9.5), and switching units never changes the stored value.
+
 ## How the numbers work
 
 - **BMR:** Mifflin-St Jeor by default. Harris-Benedict (revised) and Katch-McArdle (needs body fat %) are also available.

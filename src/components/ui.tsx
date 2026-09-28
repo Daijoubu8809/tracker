@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 
 // ---------- Icons (inline SVG, stroke = currentColor) ----------
 
@@ -143,86 +143,6 @@ export function Segmented<T extends string>({
           {o.label}
         </button>
       ))}
-    </div>
-  );
-}
-
-// ---------- Number field ----------
-
-function fmt(v: number | null, digits: number): string {
-  if (v == null || !Number.isFinite(v)) return '';
-  const f = 10 ** digits;
-  return String(Math.round(v * f) / f);
-}
-
-/**
- * Text input with a decimal keypad. Keeps its own string while typing so
- * "1." or "" don't get clobbered; reports parsed numbers (or null when empty).
- */
-export function NumField({
-  label,
-  value,
-  onChange,
-  unit,
-  digits = 1,
-  placeholder,
-  min,
-  id,
-  hideLabel = false,
-}: {
-  label: string;
-  value: number | null;
-  onChange: (v: number | null) => void;
-  unit?: string;
-  digits?: number;
-  placeholder?: string;
-  min?: number;
-  id?: string;
-  hideLabel?: boolean;
-}) {
-  const autoId = useId();
-  const inputId = id ?? autoId;
-  const [text, setText] = useState(fmt(value, digits));
-  const lastValue = useRef(value);
-  useEffect(() => {
-    if (value !== lastValue.current) {
-      lastValue.current = value;
-      const parsed = text.trim() === '' ? null : Number(text.replace(',', '.'));
-      if (parsed !== value) setText(fmt(value, digits));
-    }
-  }, [value, digits, text]);
-  return (
-    <div className="field">
-      <label htmlFor={inputId} className={hideLabel ? 'sr-only' : undefined}>
-        {label}
-      </label>
-      <div className="input-with-unit">
-        <input
-          id={inputId}
-          className="input num"
-          type="text"
-          inputMode="decimal"
-          autoComplete="off"
-          placeholder={placeholder}
-          value={text}
-          onChange={(e) => {
-            const t = e.target.value;
-            setText(t);
-            const trimmed = t.trim().replace(',', '.');
-            if (trimmed === '') {
-              lastValue.current = null;
-              onChange(null);
-              return;
-            }
-            const n = Number(trimmed);
-            if (Number.isFinite(n) && (min == null || n >= min)) {
-              lastValue.current = n;
-              onChange(n);
-            }
-          }}
-        />
-        {unit ? <span className="unit">{unit}</span> : null}
-      </div>
     </div>
   );
 }

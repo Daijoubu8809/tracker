@@ -1,11 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
-import { NumField, Sheet } from '../components/ui';
+import { Sheet } from '../components/ui';
+import { checkAll, NumberField, useNumberField } from '../components/NumberField';
 import { useSettings, useWeighIn, useWeightKg } from '../hooks';
 import { db } from '../lib/db';
 import { formatDateLong } from '../lib/dates';
-import type { ISODate } from '../lib/types';
-import { displayWeight, inputWeightToKg, weightUnit } from '../lib/units';
+import type { ISODate, UnitSystem } from '../lib/types';
+import { displayWeight, inputWeightToKg, weightRules, weightUnit } from '../lib/units';
 
 export async function saveWeight(date: ISODate, kg: number | null): Promise<void> {
   if (kg == null) {
@@ -20,20 +21,34 @@ export function QuickWeighIn({ date, onClose }: { date: ISODate; onClose: () => 
   const { units } = useSettings();
   const existing = useWeighIn(date);
   const current = useWeightKg(date);
-  const [value, setValue] = useState<number | null>(null);
-  const shown = value ?? (existing ? displayWeight(existing.kg, units) : null);
   return (
     <Sheet title={`Weigh-in · ${formatDateLong(date)}`} onClose={onClose}>
       <p className="small muted">Best: morning, after the bathroom, before eating or drinking.</p>
-      <NumField
-        label="Weight"
-        value={shown}
-        unit={weightUnit(units)}
-        placeholder={displayWeight(current, units).toFixed(1)}
-        onChange={setValue}
-      />
+      {/* Keyed so the form starts from the stored weigh-in once it has loaded. */}
+      <WeighInForm key={existing?.id ?? 'new'} date={date} existingKg={existing?.kg ?? null} currentKg={current} units={units} onClose={onClose} />
+    </Sheet>
+  );
+}
+
+function WeighInForm({
+  date,
+  existingKg,
+  currentKg,
+  units,
+  onClose,
+}: {
+  date: ISODate;
+  existingKg: number | null;
+  currentKg: number;
+  units: UnitSystem;
+  onClose: () => void;
+}) {
+  const weight = useNumberField(existingKg == null ? null : displayWeight(existingKg, units), { ...weightRules(units), required: true }, 1);
+  return (
+    <>
+      <NumberField label="Weight" unit={weightUnit(units)} placeholder={displayWeight(currentKg, units).toFixed(1)} field={weight} />
       <div className="row">
-        {existing ? (
+        {existingKg != null ? (
           <button
             type="button"
             className="btn danger"
@@ -48,16 +63,18 @@ export function QuickWeighIn({ date, onClose }: { date: ISODate; onClose: () => 
         <button
           type="button"
           className="btn primary grow"
-          disabled={shown == null || shown <= 0}
           onClick={() => {
-            if (shown != null) void saveWeight(date, inputWeightToKg(shown, units));
+            const r = checkAll([weight]);
+            if (!r.ok || r.values[0] == null) return;
+            // Unchanged text → keep the stored kg exactly (no lb↔kg round-trip).
+            if (weight.dirty || existingKg == null) void saveWeight(date, inputWeightToKg(r.values[0], units));
             onClose();
           }}
         >
           Save
         </button>
       </div>
-    </Sheet>
+    </>
   );
 }
 

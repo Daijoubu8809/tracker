@@ -777,3 +777,11 @@ video.scanner {
   width: 40px;
   height: 44px;
 }
+
+.field-msg {
+  font-size: 0.85rem;
+  color: var(--warn);
+}
+input[aria-invalid='true'] {
+  border-color: var(--warn);
+}

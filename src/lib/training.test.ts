@@ -62,3 +62,13 @@ describe('weekly summary', () => {
     expect(w.liftTypes).toEqual({ Push: 2, Pull: 1 });
   });
 });
+
+describe('formatDuration', () => {
+  it('keeps seconds', async () => {
+    const { formatDuration } = await import('./units');
+    expect(formatDuration(28.5)).toBe('28:30');
+    expect(formatDuration(45)).toBe('45 min');
+    expect(formatDuration(60)).toBe('1h 0m');
+    expect(formatDuration(62.5)).toBe('1:02:30');
+  });
+});
