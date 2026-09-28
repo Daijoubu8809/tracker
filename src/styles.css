@@ -713,3 +713,7 @@ video.scanner {
   height: 22px;
   flex: none;
 }
+.chip svg {
+  width: 18px;
+  height: 18px;
+}

@@ -10,11 +10,12 @@ import { MEALS, type LogEntry, type Meal } from '../lib/types';
 import { displayWeight, formatNumber, weightUnit } from '../lib/units';
 import { useApp } from '../state';
 import { BackupReminder } from './Backup';
-import { MealActions } from './SavedMeals';
+import { copyMeal, MealActions } from './SavedMeals';
+import { deleteEntries } from '../lib/log';
 import { QuickWeighIn } from './Body';
 
 export function Today() {
-  const { date, go, setLogMeal } = useApp();
+  const { date, go, setLogMeal, toast } = useApp();
   const settings = useSettings();
   const t = useTargets(date);
   const entries = useEntries(date);
@@ -159,7 +160,22 @@ export function Today() {
                 ))}
               </ul>
             ) : (
-              <p className="small muted">Nothing logged.</p>
+              <div className="row between">
+                <span className="small muted">Nothing logged.</span>
+                <button
+                  type="button"
+                  className="chip"
+                  onClick={() =>
+                    void copyMeal(addDays(date, -1), date, meal).then((ids) =>
+                      ids.length
+                        ? toast(`Copied yesterday’s ${MEAL_LABEL[meal].toLowerCase()}`, { label: 'Undo', run: () => void deleteEntries(ids) })
+                        : toast(`Nothing logged for ${MEAL_LABEL[meal].toLowerCase()} yesterday`),
+                    )
+                  }
+                >
+                  <Icon name="copy" /> Copy yesterday’s
+                </button>
+              </div>
             )}
           </section>
         );
