@@ -1,3 +1,5 @@
+import type { MacroRangeSetting } from './macros';
+
 // Core data model. Every stored row has a string `id` and an `updatedAt`
 // timestamp (ms) so backups can be merged without creating duplicates:
 // same id → keep the newer row. Deletions are soft (`deleted: true`) so an
@@ -80,8 +82,16 @@ export interface Settings {
   phases: Phase[];
   maintenanceSource: 'formula' | 'adaptive';
   proteinPerLb: number;
-  carbTargetG: number | null;
-  fatTargetG: number | null;
+  /** Fat range, as % of calories or grams. */
+  fatTarget: MacroRangeSetting;
+  /** Carb range: 'auto' (what's left after protein + fat), % of calories, or grams. */
+  carbTarget: MacroRangeSetting;
+  /** @deprecated v1 single-number targets; migrated into fatTarget/carbTarget. */
+  carbTargetG?: number | null;
+  /** @deprecated see carbTargetG */
+  fatTargetG?: number | null;
+  /** Workout types in rotation order. */
+  workoutTypes: WorkoutType[];
   portionRefs: PortionRefs;
   exerciseMode: ExerciseMode;
   theme: ThemePref;
@@ -256,12 +266,23 @@ export interface RunEntry extends Syncable {
   note: string;
 }
 
-export type LiftType = 'push' | 'pull' | 'legs' | 'upper' | 'lower' | 'full';
-export const LIFT_TYPES: readonly LiftType[] = ['push', 'pull', 'legs', 'upper', 'lower', 'full'];
+/** A user-defined workout (e.g. "Chest & Shoulders"). The list order is the rotation. */
+export interface WorkoutType {
+  id: string;
+  name: string;
+}
+
+/** Lift types from v1 of the app; old logs may still carry them. */
+export type LegacyLiftType = 'push' | 'pull' | 'legs' | 'upper' | 'lower' | 'full';
 
 export interface LiftEntry extends Syncable {
   date: ISODate;
-  type: LiftType;
+  /** WorkoutType id when logged; null for v1 logs. May point at a type that was since deleted. */
+  typeId: string | null;
+  /** Label at the time of logging — kept so renamed/deleted types and v1 logs still display. */
+  typeName: string;
+  /** v1 field, kept untouched on migrated rows. */
+  type?: LegacyLiftType;
   durationMin: number;
   note: string;
 }

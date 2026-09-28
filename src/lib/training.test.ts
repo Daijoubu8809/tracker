@@ -48,9 +48,9 @@ describe('weekly summary', () => {
         { ...base, id: 'r3', date: '2026-09-24', distanceKm: 3, durationMin: 20, note: '', deleted: true },
       ],
       [
-        { ...base, id: 'l1', date: '2026-09-21', type: 'push', durationMin: 60, note: '' },
-        { ...base, id: 'l2', date: '2026-09-23', type: 'pull', durationMin: 55, note: '' },
-        { ...base, id: 'l3', date: '2026-09-25', type: 'push', durationMin: 50, note: '' },
+        { ...base, id: 'l1', date: '2026-09-21', typeId: 'p', typeName: 'Push', durationMin: 60, note: '' },
+        { ...base, id: 'l2', date: '2026-09-23', typeId: 'q', typeName: 'Pull', durationMin: 55, note: '' },
+        { ...base, id: 'l3', date: '2026-09-25', typeId: 'p', typeName: 'Push', durationMin: 50, note: '' },
       ],
     );
     expect(w.end).toBe('2026-09-27');
@@ -59,6 +59,6 @@ describe('weekly summary', () => {
     expect(w.runCount).toBe(2);
     expect(w.runKm).toBe(13);
     expect(w.liftCount).toBe(3);
-    expect(w.liftTypes).toEqual({ push: 2, pull: 1 });
+    expect(w.liftTypes).toEqual({ Push: 2, Pull: 1 });
   });
 });

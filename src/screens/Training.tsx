@@ -2,17 +2,16 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import { DateSwitcher } from '../components/DateSwitcher';
 import { Icon, NumField, Segmented, Sheet, TextField } from '../components/ui';
-import { useDayExercise, useSettings, useWeightKg } from '../hooks';
+import { useDayExercise, useLifts, useSettings, useWeightKg } from '../hooks';
 import { db, live } from '../lib/db';
 import { addDays, formatDateShort, todayISO, weekStart } from '../lib/dates';
 import { liftKcal, runKcal } from '../lib/energy';
 import { newId } from '../lib/id';
 import { pace, parseDuration, summarizeWeek, type WeekSummary } from '../lib/training';
-import { LIFT_TYPES, type LiftEntry, type LiftType, type RunEntry } from '../lib/types';
+import type { LiftEntry, RunEntry, WorkoutType } from '../lib/types';
+import { lastDuration, liftLabel, nextWorkout, overdueTypes } from '../lib/workouts';
 import { displayDistance, distanceUnit, formatDuration, formatNumber, formatPace, inputDistanceToKm } from '../lib/units';
 import { useApp } from '../state';
-
-const LIFT_LABEL: Record<LiftType, string> = { push: 'Push', pull: 'Pull', legs: 'Legs', upper: 'Upper', lower: 'Lower', full: 'Full body' };
 
 export function Training() {
   const { date, toast } = useApp();
@@ -24,6 +23,8 @@ export function Training() {
   const [liftOpen, setLiftOpen] = useState<LiftEntry | null>(null);
   useEffect(() => setSteps(null), [date]);
   const shownSteps = steps ?? ex.steps;
+  const lifts = useLifts();
+  const next = nextWorkout(s.workoutTypes, lifts, date);
   const dist = distanceUnit(s.units);
 
   const saveSteps = () => {
@@ -97,11 +98,26 @@ export function Training() {
           <button
             type="button"
             className="btn small"
-            onClick={() => setLiftOpen({ id: newId(), date, type: 'push', durationMin: 60, note: '', updatedAt: 0 })}
+            onClick={() =>
+              setLiftOpen({
+                id: newId(),
+                date,
+                typeId: next?.id ?? null,
+                typeName: next?.name ?? 'Lift',
+                durationMin: (next && lastDuration(next, lifts)) ?? 60,
+                note: '',
+                updatedAt: 0,
+              })
+            }
           >
             + Lift
           </button>
         </div>
+        {next ? (
+          <p className="small" style={{ margin: 0 }}>
+            Next up: <b>{next.name}</b>
+          </p>
+        ) : null}
         {ex.lifts.length ? (
           <ul className="list">
             {ex.lifts.map((l) => (
@@ -109,7 +125,7 @@ export function Training() {
                 <button type="button" className="list-item" onClick={() => setLiftOpen(l)}>
                   <div className="grow">
                     <div>
-                      {LIFT_LABEL[l.type]} · {formatDuration(l.durationMin)}
+                      {liftLabel(l, s.workoutTypes)} · {formatDuration(l.durationMin)}
                     </div>
                     {l.note ? <div className="small muted">{l.note}</div> : null}
                   </div>
@@ -201,21 +217,60 @@ function fmtClock(min: number): string {
 }
 
 function LiftSheet({ lift, onClose }: { lift: LiftEntry; onClose: () => void }) {
+  const { workoutTypes } = useSettings();
+  const lifts = useLifts();
   const isNew = lift.updatedAt === 0;
   const [draft, setDraft] = useState(lift);
+  const [durationTouched, setDurationTouched] = useState(!isNew);
+  // An old log whose type was deleted (or a v1 type like "Upper") stays selectable so saving keeps its label.
+  const orphan = !workoutTypes.some((t) => t.id === draft.typeId) ? { id: draft.typeId ?? '__orphan', name: draft.typeName } : null;
+  const pick = (t: WorkoutType) => {
+    const remembered = lastDuration(t, lifts);
+    setDraft({
+      ...draft,
+      typeId: t.id,
+      typeName: t.name,
+      durationMin: !durationTouched && remembered ? remembered : draft.durationMin,
+    });
+  };
+  const current = workoutTypes.find((t) => t.id === draft.typeId);
   return (
     <Sheet title={isNew ? 'Log a lift' : 'Edit lift'} onClose={onClose}>
-      <div className="chips" role="group" aria-label="Lift type">
-        {LIFT_TYPES.map((t) => (
-          <button key={t} type="button" className="chip" aria-pressed={draft.type === t} onClick={() => setDraft({ ...draft, type: t })}>
-            {LIFT_LABEL[t]}
+      <div className="chips" role="group" aria-label="Workout">
+        {workoutTypes.map((t) => (
+          <button key={t.id} type="button" className="chip" aria-pressed={draft.typeId === t.id} onClick={() => pick(t)}>
+            {t.name}
           </button>
         ))}
+        {orphan && !isNew ? (
+          <button type="button" className="chip" aria-pressed>
+            {orphan.name} (old)
+          </button>
+        ) : null}
       </div>
-      <NumField label="Duration" value={draft.durationMin} digits={0} unit="min" onChange={(v) => setDraft({ ...draft, durationMin: v ?? 0 })} />
+      {!workoutTypes.length ? <p className="small muted">Add workout types in Settings → Training.</p> : null}
+      <NumField
+        label="Duration"
+        value={draft.durationMin}
+        digits={0}
+        unit="min"
+        onChange={(v) => {
+          setDurationTouched(true);
+          setDraft({ ...draft, durationMin: v ?? 0 });
+        }}
+      />
       <div className="chips">
         {[30, 45, 60, 75, 90].map((m) => (
-          <button key={m} type="button" className="chip" aria-pressed={draft.durationMin === m} onClick={() => setDraft({ ...draft, durationMin: m })}>
+          <button
+            key={m}
+            type="button"
+            className="chip"
+            aria-pressed={draft.durationMin === m}
+            onClick={() => {
+              setDurationTouched(true);
+              setDraft({ ...draft, durationMin: m });
+            }}
+          >
             {m} min
           </button>
         ))}
@@ -237,9 +292,15 @@ function LiftSheet({ lift, onClose }: { lift: LiftEntry; onClose: () => void }) 
         <button
           type="button"
           className="btn primary grow"
-          disabled={draft.durationMin <= 0}
+          disabled={draft.durationMin <= 0 || (!current && !orphan)}
           onClick={() => {
-            void db.lifts.put({ ...draft, note: draft.note.trim(), updatedAt: Date.now(), deleted: false });
+            void db.lifts.put({
+              ...draft,
+              typeName: current?.name ?? draft.typeName,
+              note: draft.note.trim(),
+              updatedAt: Date.now(),
+              deleted: false,
+            });
             onClose();
           }}
         >
@@ -250,69 +311,99 @@ function LiftSheet({ lift, onClose }: { lift: LiftEntry; onClose: () => void }) 
   );
 }
 
-/** This week vs previous weeks: steps average, run mileage, number of lifts. */
+/** This week: runs (count, distance, pace), each lift type, overdue types; plus a 4-week table. */
 export function WeeklySummary() {
-  const { units } = useSettings();
+  const { units, workoutTypes } = useSettings();
   const { date } = useApp();
-  const [weeksBack, setWeeksBack] = useState<'1' | '4'>('4');
-  const thisWeek = weekStart(date > todayISO() ? todayISO() : date);
+  const lifts = useLifts();
+  const [view, setView] = useState<'1' | '4'>('1');
+  const today = todayISO();
+  const ref = date > today ? today : date;
+  const thisWeek = weekStart(ref);
   const first = addDays(thisWeek, -7 * 3);
   const end = addDays(thisWeek, 6);
   const data = useLiveQuery(
     async () => {
-      const [steps, runs, lifts] = await Promise.all([
+      const [steps, runs] = await Promise.all([
         db.steps.where('date').between(first, end, true, true).toArray(),
         db.runs.where('date').between(first, end, true, true).toArray(),
-        db.lifts.where('date').between(first, end, true, true).toArray(),
       ]);
-      return { steps: live(steps), runs: live(runs), lifts: live(lifts) };
+      return { steps: live(steps), runs: live(runs) };
     },
     [first, end],
-    { steps: [], runs: [], lifts: [] },
+    { steps: [], runs: [] },
   );
-  const weeks: WeekSummary[] = [0, 1, 2, 3].map((i) => summarizeWeek(addDays(thisWeek, -7 * i), data.steps, data.runs, data.lifts));
+  const weeks: WeekSummary[] = [0, 1, 2, 3].map((i) => summarizeWeek(addDays(thisWeek, -7 * i), data.steps, data.runs, lifts, workoutTypes));
   const dist = distanceUnit(units);
   const cur = weeks[0];
+  const overdue = lifts.length ? overdueTypes(workoutTypes, lifts, ref) : [];
+  const paceText = (w: WeekSummary) => {
+    if (w.avgPaceMinPerKm == null) return '—';
+    const perUnit = units === 'us' ? w.avgPaceMinPerKm * 1.609344 : w.avgPaceMinPerKm;
+    return `${formatPace(perUnit)} /${dist}`;
+  };
   return (
     <section className="card stack" aria-labelledby="week-h">
       <h2 id="week-h">Weekly summary</h2>
       <Segmented
-          label="Weeks shown"
-          options={[
-            { value: '1', label: 'This week' },
-            { value: '4', label: '4 weeks' },
-          ]}
-          value={weeksBack}
-          onChange={setWeeksBack}
-        />
-      {weeksBack === '1' ? (
+        label="Weeks shown"
+        options={[
+          { value: '1', label: 'This week' },
+          { value: '4', label: '4 weeks' },
+        ]}
+        value={view}
+        onChange={setView}
+      />
+      {view === '1' ? (
         <>
           <p className="small muted">
             {formatDateShort(cur.start)} – {formatDateShort(cur.end)}
           </p>
           <div className="stat-row">
             <div className="stat">
-              <span className="small muted">Avg steps</span>
-              <b>{cur.avgSteps != null ? formatNumber(Math.round(cur.avgSteps)) : '—'}</b>
-              <span className="tiny muted">{cur.stepDays} days entered</span>
-            </div>
-            <div className="stat">
-              <span className="small muted">Running</span>
-              <b>
+              <span className="small muted">Runs</span>
+              <b>{cur.runCount}</b>
+              <span className="tiny muted num">
                 {displayDistance(cur.runKm, units).toFixed(1)} {dist}
-              </b>
-              <span className="tiny muted">{cur.runCount} runs</span>
-            </div>
-            <div className="stat">
-              <span className="small muted">Lifts</span>
-              <b>{cur.liftCount}</b>
-              <span className="tiny muted">
-                {Object.entries(cur.liftTypes)
-                  .map(([t, n]) => `${LIFT_LABEL[t as LiftType]}${n > 1 ? ` ×${n}` : ''}`)
-                  .join(', ') || '—'}
               </span>
             </div>
+            <div className="stat">
+              <span className="small muted">Avg pace</span>
+              <b className="num">{paceText(cur)}</b>
+            </div>
+            <div className="stat">
+              <span className="small muted">Avg steps</span>
+              <b>{cur.avgSteps != null ? formatNumber(Math.round(cur.avgSteps)) : '—'}</b>
+              <span className="tiny muted">{cur.stepDays} days</span>
+            </div>
           </div>
+          <h3>Lifts this week ({cur.liftCount})</h3>
+          <ul className="list">
+            {workoutTypes.map((t) => (
+              <li key={t.id} className="row between" style={{ padding: '6px 0' }}>
+                <span>{t.name}</span>
+                <b className="num">{cur.liftTypes[t.name] ?? 0}</b>
+              </li>
+            ))}
+            {Object.entries(cur.liftTypes)
+              .filter(([name]) => !workoutTypes.some((t) => t.name === name))
+              .map(([name, n]) => (
+                <li key={name} className="row between small muted" style={{ padding: '6px 0' }}>
+                  <span>{name}</span>
+                  <b className="num">{n}</b>
+                </li>
+              ))}
+          </ul>
+          {overdue.length ? (
+            <p className="small" style={{ margin: 0 }}>
+              <b>Not done in 7+ days:</b>{' '}
+              {overdue.map((o) => `${o.type.name} (${o.daysAgo == null ? 'not logged yet' : `${o.daysAgo} days`})`).join(', ')}
+            </p>
+          ) : lifts.length ? (
+            <p className="small muted" style={{ margin: 0 }}>
+              Every workout type done within the last week.
+            </p>
+          ) : null}
         </>
       ) : (
         <table className="simple">
@@ -320,13 +411,13 @@ export function WeeklySummary() {
             <tr>
               <th scope="col">Week of</th>
               <th scope="col" className="num">
-                Avg steps
-              </th>
-              <th scope="col" className="num">
-                Run {dist}
+                Runs ({dist})
               </th>
               <th scope="col" className="num">
                 Lifts
+              </th>
+              <th scope="col" className="num">
+                Avg steps
               </th>
             </tr>
           </thead>
@@ -334,11 +425,11 @@ export function WeeklySummary() {
             {weeks.map((w) => (
               <tr key={w.start}>
                 <td>{formatDateShort(w.start)}</td>
-                <td className="num">{w.avgSteps != null ? formatNumber(Math.round(w.avgSteps)) : '—'}</td>
                 <td className="num">
-                  {displayDistance(w.runKm, units).toFixed(1)} <span className="muted">({w.runCount})</span>
+                  {w.runCount} <span className="muted">({displayDistance(w.runKm, units).toFixed(1)})</span>
                 </td>
                 <td className="num">{w.liftCount}</td>
+                <td className="num">{w.avgSteps != null ? formatNumber(Math.round(w.avgSteps)) : '—'}</td>
               </tr>
             ))}
           </tbody>

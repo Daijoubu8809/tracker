@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { db as defaultDb, getSettings, SYNC_TABLES, type SyncTable, type TrackerDB } from './db';
+import { db as defaultDb, getSettings, migrateSettings, SYNC_TABLES, type SyncTable, type TrackerDB } from './db';
+import { migrateLift } from './workouts';
 import type { Settings, Syncable } from './types';
 
 export const BACKUP_APP = 'plate-tracker';
@@ -101,7 +102,8 @@ export async function importData(text: string, database: TrackerDB = defaultDb):
       let invalid = 0;
       for (const r of rows) {
         const ok = RowSchema.safeParse(r);
-        if (ok.success) valid.push(ok.data as Syncable);
+        // Older backups: bring v1 lift rows up to the current shape.
+        if (ok.success) valid.push((t === 'lifts' ? migrateLift(ok.data) : ok.data) as Syncable);
         else invalid++;
       }
       const existing = (await database.table(t).toArray()) as Syncable[];
@@ -112,7 +114,7 @@ export async function importData(text: string, database: TrackerDB = defaultDb):
     }
     if (b.settings) {
       const mine = await database.settings.get('main');
-      const incoming = b.settings as unknown as Settings;
+      const incoming = migrateSettings(b.settings as unknown as Settings);
       if (!mine || incoming.updatedAt > mine.updatedAt) {
         await database.settings.put({
           ...incoming,

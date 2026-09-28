@@ -12,6 +12,7 @@ import { useApp } from '../state';
 import { PortionRefsEditor } from './PortionGuide';
 import { BackupCard } from './Backup';
 import { AdaptiveCard } from './AdaptiveCard';
+import { MacroTargetsEditor, WorkoutTypesEditor } from './TargetsEditors';
 
 const GOAL_OPTIONS: { value: GoalMode; label: string }[] = [
   { value: 'cut', label: 'Cut' },
@@ -168,7 +169,10 @@ export function Settings() {
 
       <section className="card stack" aria-labelledby="goal-h">
         <h2 id="goal-h">Goal</h2>
-        <p className="small muted">Default goal. A scheduled phase (below) overrides it on its dates.</p>
+        <p className="small muted">
+          Default goal. A scheduled phase (below) overrides it on its dates. The calorie target is your daily max, shown on Today as
+          “eaten / {t.calories.toLocaleString()}”.
+        </p>
         <GoalEditor goal={s.goal} onChange={(goal) => save({ goal })} />
         {t.belowBmr ? (
           <div className="banner warn" role="alert">
@@ -180,7 +184,7 @@ export function Settings() {
       </section>
 
       <section className="card stack" aria-labelledby="macro-h">
-        <h2 id="macro-h">Protein & macros</h2>
+        <h2 id="macro-h">Goals: protein, carbs & fat</h2>
         <NumField
           label="Protein per lb of body weight"
           value={s.proteinPerLb}
@@ -188,11 +192,14 @@ export function Settings() {
           unit="g/lb"
           onChange={(v) => v != null && v > 0 && save({ proteinPerLb: v })}
         />
-        <p className="small muted">Currently {t.proteinG} g/day.</p>
-        <div className="grid-2">
-          <NumField label="Carb target (optional)" value={s.carbTargetG} digits={0} unit="g" onChange={(v) => save({ carbTargetG: v && v > 0 ? v : null })} />
-          <NumField label="Fat target (optional)" value={s.fatTargetG} digits={0} unit="g" onChange={(v) => save({ fatTargetG: v && v > 0 ? v : null })} />
-        </div>
+        <p className="small muted">Currently {t.proteinG} g/day (a single target).</p>
+        <MacroTargetsEditor settings={s} calories={t.calories} fat={t.macros.fat} carbs={t.macros.carbs} />
+      </section>
+
+      <section className="card stack" aria-labelledby="training-h">
+        <h2 id="training-h">Training</h2>
+        <h3>Workout types</h3>
+        <WorkoutTypesEditor types={s.workoutTypes} />
       </section>
 
       <section className="card stack" aria-labelledby="ex-h">

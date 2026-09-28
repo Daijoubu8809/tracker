@@ -18,6 +18,7 @@
   --chart-grid: #e1e6e3;
   --series-1: #00897b;
   --series-2: #b86e00;
+  --over: #b86e00;
   --focus: #2563eb;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 16px rgb(0 0 0 / 0.06);
   --radius: 14px;
@@ -50,6 +51,7 @@
   --chart-grid: #24352f;
   --series-1: #1aa594;
   --series-2: #c98416;
+  --over: #c98416;
   --focus: #93c5fd;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
   color-scheme: dark;
@@ -731,4 +733,47 @@ video.scanner {
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
   color: var(--text);
+}
+
+/* Range bars: neutral below the min, accent inside the range, amber past the max */
+.bar > div.state-under {
+  background: var(--text-2);
+  opacity: 0.45;
+}
+.bar > div.state-in {
+  background: var(--accent);
+}
+.bar > div.state-over {
+  background: var(--over);
+}
+.macro-tile {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.macro-tile .bar {
+  grid-column: 1 / -1;
+}
+.macro-tile .over-note {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+.macro-tile .bar {
+  height: 8px;
+}
+.macro-tile b {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.05rem;
+}
+
+.stat > span,
+.stat > b {
+  display: block;
+}
+
+.workout-row .icon-btn {
+  width: 40px;
+  height: 44px;
 }

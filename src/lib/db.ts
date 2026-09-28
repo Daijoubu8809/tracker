@@ -13,6 +13,18 @@ import type {
   WeightEntry,
 } from './types';
 import { defaultSettings } from './defaults';
+import { DEFAULT_CARB_TARGET, DEFAULT_FAT_TARGET, legacyToRange } from './macros';
+import { DEFAULT_WORKOUT_TYPES, migrateLift } from './workouts';
+
+/** Fill in fields added after v1 (idempotent; used by the Dexie upgrade, getSettings and backup import). */
+export function migrateSettings<T extends Partial<Settings>>(s: T): T {
+  return {
+    ...s,
+    fatTarget: s.fatTarget ?? legacyToRange(s.fatTargetG, DEFAULT_FAT_TARGET),
+    carbTarget: s.carbTarget ?? legacyToRange(s.carbTargetG, DEFAULT_CARB_TARGET),
+    workoutTypes: s.workoutTypes ?? DEFAULT_WORKOUT_TYPES.map((w) => ({ ...w })),
+  };
+}
 
 export class TrackerDB extends Dexie {
   settings!: EntityTable<Settings, 'id'>;
@@ -42,6 +54,24 @@ export class TrackerDB extends Dexie {
       runs: 'id, date',
       lifts: 'id, date',
     });
+    // v2: lifts get user-defined workout types (typeId + saved label) and settings get
+    // carb/fat ranges + workout types. Nothing is deleted: old fields stay on the rows.
+    this.version(2)
+      .stores({ lifts: 'id, date, typeId' })
+      .upgrade(async (tx) => {
+        await tx
+          .table('lifts')
+          .toCollection()
+          .modify((row: Partial<LiftEntry>) => {
+            Object.assign(row, migrateLift(row));
+          });
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((row: Partial<Settings>) => {
+            Object.assign(row, migrateSettings(row));
+          });
+      });
   }
 }
 
@@ -66,7 +96,7 @@ export async function getSettings(database: TrackerDB = db): Promise<Settings> {
   // Merge with defaults so settings saved by older versions gain new fields.
   const d = defaultSettings();
   if (!s) return d;
-  return { ...d, ...s, profile: { ...d.profile, ...s.profile }, portionRefs: { ...d.portionRefs, ...s.portionRefs } };
+  return { ...d, ...migrateSettings(s), profile: { ...d.profile, ...s.profile }, portionRefs: { ...d.portionRefs, ...s.portionRefs } };
 }
 
 export async function saveSettings(patch: Partial<Omit<Settings, 'id'>>, database: TrackerDB = db): Promise<void> {

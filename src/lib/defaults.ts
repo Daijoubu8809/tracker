@@ -1,5 +1,7 @@
 import type { PortionRefs, Settings } from './types';
 import { inToCm, lbToKg } from './units';
+import { DEFAULT_CARB_TARGET, DEFAULT_FAT_TARGET } from './macros';
+import { DEFAULT_WORKOUT_TYPES } from './workouts';
 
 export const DEFAULT_PORTION_REFS: PortionRefs = {
   plateFullCups: 3, // ½ plate ≈ 1.5 cups, ¼ plate ≈ ¾ cup
@@ -33,8 +35,9 @@ export function defaultSettings(): Settings {
     phases: [],
     maintenanceSource: 'formula',
     proteinPerLb: 0.8,
-    carbTargetG: null,
-    fatTargetG: null,
+    fatTarget: { ...DEFAULT_FAT_TARGET },
+    carbTarget: { ...DEFAULT_CARB_TARGET },
+    workoutTypes: DEFAULT_WORKOUT_TYPES.map((w) => ({ ...w })),
     portionRefs: { ...DEFAULT_PORTION_REFS },
     exerciseMode: 'multiplier',
     theme: 'system',

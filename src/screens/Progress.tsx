@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo, useState } from 'react';
-import { IntakeChart, TrendChart } from '../components/Charts';
+import { BandChart, IntakeChart, TrendChart, type BandDatum } from '../components/Charts';
 import { NumField, Segmented, Sheet, TextField } from '../components/ui';
 import { useAdaptive, useEntriesRange, useSettings, useTargets, useWaists, useWeightKg, useWeights } from '../hooks';
 import { db, live } from '../lib/db';
@@ -119,6 +119,7 @@ export function Progress() {
       </section>
 
       <IntakeCard />
+      <MacroTrendCard />
       <AdaptiveCard />
       <WeeklySummary />
       <NotesCard />
@@ -207,6 +208,60 @@ function NotesCard() {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+/** 7-day average protein, carbs and fat vs each day's targets (targets follow phases). */
+function MacroTrendCard() {
+  const s = useSettings();
+  const today = todayISO();
+  const start = addDays(today, -27);
+  const entries = useEntriesRange(addDays(start, -6), today);
+  const adaptive = useAdaptive();
+  const weightKg = useWeightKg(today);
+  const charts = useMemo(() => {
+    const byDay = new Map<ISODate, { protein: number; carbs: number; fat: number }>();
+    for (const e of entries) {
+      const d = byDay.get(e.date) ?? { protein: 0, carbs: 0, fat: 0 };
+      d.protein += e.protein;
+      d.carbs += e.carbs;
+      d.fat += e.fat;
+      byDay.set(e.date, d);
+    }
+    const days = dateRange(start, today);
+    const out: Record<'protein' | 'carbs' | 'fat', BandDatum[]> = { protein: [], carbs: [], fat: [] };
+    for (const d of days) {
+      const m = computeTargets({
+        settings: s,
+        date: d,
+        weightKg,
+        adaptiveMaintenance: adaptive.ok ? adaptive.maintenance : null,
+        exerciseKcal: 0,
+      }).macros;
+      // Completed logged days in the 7 days ending here (today is still in progress).
+      const window = dateRange(addDays(d, -6), d).filter((x) => x !== today && byDay.has(x));
+      const avg = (k: 'protein' | 'carbs' | 'fat') =>
+        window.length >= 3 ? window.reduce((sum, x) => sum + (byDay.get(x)?.[k] ?? 0), 0) / window.length : null;
+      out.protein.push({ date: d, avg7: avg('protein'), min: m.proteinG, max: m.proteinG });
+      out.carbs.push({ date: d, avg7: avg('carbs'), min: m.carbs.min, max: m.carbs.max });
+      out.fat.push({ date: d, avg7: avg('fat'), min: m.fat.min, max: m.fat.max });
+    }
+    return out;
+  }, [entries, s, adaptive, weightKg, start, today]);
+  const hasData = charts.protein.some((d) => d.avg7 != null);
+  return (
+    <section className="card stack" aria-labelledby="macro-trend-h">
+      <h2 id="macro-trend-h">Macros: 7-day average vs target</h2>
+      {hasData ? (
+        <>
+          <BandChart data={charts.protein} label="Protein" unit="g" />
+          <BandChart data={charts.carbs} label="Carbs" unit="g" />
+          <BandChart data={charts.fat} label="Fat" unit="g" />
+        </>
+      ) : (
+        <p className="small muted">Log at least 3 days to see 7-day averages.</p>
+      )}
     </section>
   );
 }

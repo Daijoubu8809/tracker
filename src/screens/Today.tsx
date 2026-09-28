@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { DateSwitcher } from '../components/DateSwitcher';
 import { EntryEditor } from '../components/EntryEditor';
-import { Icon, ProgressBar } from '../components/ui';
-import { useDayExercise, useEntries, useEntriesRange, useSettings, useTargets, useWeighIn } from '../hooks';
+import { Icon } from '../components/ui';
+import { MacroTile, RangeBar } from '../components/MacroBar';
+import { nextWorkout } from '../lib/workouts';
+import { lowFatNote } from '../lib/macros';
+import { useDayExercise, useEntries, useEntriesRange, useLifts, useSettings, useTargets, useWeighIn } from '../hooks';
 import { addDays, daysBetween, todayISO } from '../lib/dates';
 import { MEAL_LABEL } from '../lib/log';
 import { roundRange, sumItems } from '../lib/portions';
@@ -27,6 +30,10 @@ export function Today() {
   const [editing, setEditing] = useState<LogEntry | null>(null);
   const [weighing, setWeighing] = useState(false);
   const lowStreak = useLowIntakeStreak(date, t.bmr.bmr);
+  const m = t.macros;
+  const lifts = useLifts();
+  const next = nextWorkout(settings.workoutTypes, lifts, date);
+  const fatNote = lowFatNote(date, entries.length, totals.fat, m.fat.min);
 
   const byMeal = new Map<Meal, LogEntry[]>(MEALS.map((m) => [m, []]));
   for (const e of entries) byMeal.get(e.meal)?.push(e);
@@ -45,16 +52,16 @@ export function Today() {
         <div className="row between">
           <div>
             <div className="big-number">{formatNumber(Math.abs(Math.round(remaining)))}</div>
-            <div className="muted small">{remaining >= 0 ? 'kcal remaining' : 'kcal over target'}</div>
+            <div className="muted small">{remaining >= 0 ? 'kcal remaining' : 'kcal past target'}</div>
           </div>
           <div className="right">
             <div className="num">
-              <b>≈ {formatNumber(Math.round(totals.kcal))}</b> <span className="muted small">(±{range})</span>
+              <b>≈ {formatNumber(Math.round(totals.kcal))}</b> / {formatNumber(t.calories)} kcal
             </div>
-            <div className="muted small num">of {formatNumber(t.calories)} target</div>
+            <div className="muted small num">±{range} estimate</div>
           </div>
         </div>
-        <ProgressBar label="Calories eaten vs target" value={totals.kcal} max={t.calories} />
+        <RangeBar label="Calories" eaten={totals.kcal} min={0} max={t.calories} unit="kcal" />
         <div className="row between small muted">
           <span>
             {t.phase ? (
@@ -81,34 +88,17 @@ export function Today() {
         ) : null}
       </section>
 
-      <section className="card stack" aria-label="Protein and macros">
-        <div className="row between">
-          <b>Protein</b>
-          <span className="num">
-            {Math.round(totals.protein)} / {t.proteinG} g
-          </span>
+      <section className="card stack" aria-label="Macros">
+        <div className="stack" style={{ gap: 12 }}>
+          <MacroTile label="Protein" eaten={totals.protein} min={m.proteinG} max={null} />
+          <MacroTile label="Carbs" eaten={totals.carbs} min={m.carbs.min} max={m.carbs.max} />
+          <MacroTile label="Fat" eaten={totals.fat} min={m.fat.min} max={m.fat.max} />
         </div>
-        <ProgressBar label="Protein vs target" value={totals.protein} max={t.proteinG} color="var(--protein)" />
-        <div className="macro-grid">
-          <div className="macro">
-            <b style={{ color: 'var(--protein)' }}>{Math.round(totals.protein)} g</b>
-            <span className="small muted">Protein</span>
-          </div>
-          <div className="macro">
-            <b style={{ color: 'var(--carbs)' }}>
-              {Math.round(totals.carbs)}
-              {t.carbsG ? `/${t.carbsG}` : ''} g
-            </b>
-            <span className="small muted">Carbs</span>
-          </div>
-          <div className="macro">
-            <b style={{ color: 'var(--fat)' }}>
-              {Math.round(totals.fat)}
-              {t.fatG ? `/${t.fatG}` : ''} g
-            </b>
-            <span className="small muted">Fat</span>
-          </div>
-        </div>
+        {fatNote ? (
+          <p className="small muted" role="note" style={{ margin: 0 }}>
+            {fatNote}
+          </p>
+        ) : null}
       </section>
 
       <section className="stat-row" aria-label="Day summary">
@@ -124,6 +114,7 @@ export function Today() {
           <span className="small muted">Exercise</span>
           <b>{exercise.kcal > 0 ? `≈${Math.round(exercise.kcal)}` : '—'}</b>
           <span className="tiny muted">{t.exerciseAdded ? 'added to budget' : 'kcal, info only'}</span>
+          {next ? <span className="tiny">Next up: {next.name}</span> : null}
         </button>
       </section>
 
@@ -213,3 +204,4 @@ function useLowIntakeStreak(date: string, bmr: number): number {
   }
   return streak;
 }
+

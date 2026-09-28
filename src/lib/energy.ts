@@ -1,5 +1,6 @@
 import type { ActivityLevel, BmrFormula, GoalSpec, ISODate, Phase, Profile, Settings } from './types';
 import { kgToLb } from './units';
+import { macroTargets, type MacroTargets } from './macros';
 
 export const ACTIVITY: Record<ActivityLevel, { label: string; factor: number; hint: string }> = {
   sedentary: { label: 'Sedentary', factor: 1.2, hint: 'Desk/class, little walking' },
@@ -136,8 +137,8 @@ export interface DailyTargets {
   calories: number;
   belowBmr: boolean;
   proteinG: number;
-  carbsG: number | null;
-  fatG: number | null;
+  /** Protein target plus carb/fat gram ranges for this day's calories. */
+  macros: MacroTargets;
   steps: string[];
 }
 
@@ -183,6 +184,15 @@ export function computeTargets(input: TargetInputs): DailyTargets {
   const belowBmr = calories < bmr.bmr;
   const proteinG = kgToLb(weightKg) * s.proteinPerLb;
   steps.push(`Protein: ${s.proteinPerLb} g × ${Math.round(kgToLb(weightKg))} lb = ${Math.round(proteinG)} g`);
+  const macros = macroTargets(calories, proteinG, s.fatTarget, s.carbTarget);
+  steps.push(
+    `Fat: ${macros.fat.min}–${macros.fat.max} g${s.fatTarget.mode === 'pct' ? ` (${s.fatTarget.min}–${s.fatTarget.max}% of ${Math.round(calories)} kcal ÷ 9)` : ''}`,
+  );
+  steps.push(
+    s.carbTarget.mode === 'auto'
+      ? `Carbs: (${Math.round(calories)} − ${Math.round(proteinG)} g protein × 4 − ${Math.round((macros.fat.min + macros.fat.max) / 2)} g fat × 9) ÷ 4, ±15% = ${macros.carbs.min}–${macros.carbs.max} g`
+      : `Carbs: ${macros.carbs.min}–${macros.carbs.max} g`,
+  );
   return {
     bmr,
     formulaTdee,
@@ -194,8 +204,7 @@ export function computeTargets(input: TargetInputs): DailyTargets {
     calories: Math.round(calories),
     belowBmr,
     proteinG: Math.round(proteinG),
-    carbsG: s.carbTargetG,
-    fatG: s.fatTargetG,
+    macros,
     steps,
   };
 }

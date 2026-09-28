@@ -119,7 +119,12 @@ label form. If the camera isn’t available, type the barcode number instead.
   formula number (Progress or Settings), and you can switch to it with one tap.
 - **Goals:** Cut (−400 by default), Maintain (with an optional offset), Lean bulk (+300), or a Custom number. **Phases**
   (Settings → Goal) switch the target automatically on their dates. Give a phase a goal weight to see “3.4 lb to go, on pace for …”.
-- **Protein:** 0.8 g per lb of trend weight (editable). Carbs and fat only get targets if you set them.
+- **Protein:** 0.8 g per lb of trend weight (editable), a single target.
+- **Carbs & fat:** ranges (min–max), set as % of calories or grams in Settings → Goals. Defaults: fat 20–30% of calories;
+  carbs = the calories left after protein and the middle of the fat range, ±15%. %-based ranges follow the calorie target
+  (e.g. a phase change). Today shows “eaten / target” bars: neutral below the range, accent inside it, amber past the max
+  with a small “+12 g over”. The calorie target is the day’s max (“1,353 / 2,652”). Progress charts the 7-day average of
+  each macro against its target.
 - **Safety:** a target below your BMR shows a warning. If your logged intake is under BMR for 3+ days in a row, Today shows
   a calm note. The app never praises eating less.
 - **Exercise:** your activity multiplier already covers training, so workouts don’t add to your budget by default and their
@@ -127,6 +132,16 @@ label form. If the camera isn’t available, type the barcode number instead.
   your logged steps (above 4,000), runs, and lifts.
 - **Uncertainty:** each food has a typical error (±15% for plain rice up to ±35–40% for fried, sauced, or mixed dishes). Day totals
   combine them as independent errors (root-sum-square).
+
+## Training
+
+- **Workout types and rotation:** Settings → Training lists your workouts (default: Triceps & Biceps → Chest & Shoulders →
+  Abs & Back). Rename, add, delete or reorder them; the order is the rotation. **Log a lift** preselects the next one after
+  your most recent lift (by workout date), plus the duration you used last time for that workout — tap another to override.
+  “Next up” shows on Training and on Today’s Exercise tile.
+- Deleting or renaming a type never touches past logs: old entries keep their original label (including v1 types like “Upper”).
+- **Weekly summary:** runs (count, distance, average pace), each lift type’s count this week, and which types haven’t been
+  done in 7+ days.
 
 ## Adding or fixing foods
 

@@ -1,5 +1,6 @@
 import { addDays, dateRange } from './dates';
-import type { ISODate, LiftEntry, LiftType, RunEntry, StepsEntry } from './types';
+import type { ISODate, LiftEntry, RunEntry, StepsEntry, WorkoutType } from './types';
+import { liftLabel } from './workouts';
 
 /** "28", "28:30", "1:02:30" → minutes (null if invalid). */
 export function parseDuration(text: string): number | null {
@@ -31,9 +32,12 @@ export interface WeekSummary {
   runCount: number;
   runKm: number;
   runMinutes: number;
+  /** Minutes per km over all runs with a time (null if none). */
+  avgPaceMinPerKm: number | null;
   liftCount: number;
   liftMinutes: number;
-  liftTypes: Partial<Record<LiftType, number>>;
+  /** Count per lift label (current name for renamed types, saved label otherwise). */
+  liftTypes: Record<string, number>;
 }
 
 export function summarizeWeek(
@@ -41,6 +45,7 @@ export function summarizeWeek(
   steps: readonly StepsEntry[],
   runs: readonly RunEntry[],
   lifts: readonly LiftEntry[],
+  types: readonly WorkoutType[] = [],
 ): WeekSummary {
   const end = addDays(start, 6);
   const inWeek = (d: ISODate) => d >= start && d <= end;
@@ -48,16 +53,22 @@ export function summarizeWeek(
   const s = steps.filter((x) => !x.deleted && days.has(x.date) && x.steps > 0);
   const r = runs.filter((x) => !x.deleted && inWeek(x.date));
   const l = lifts.filter((x) => !x.deleted && inWeek(x.date));
-  const liftTypes: Partial<Record<LiftType, number>> = {};
-  for (const x of l) liftTypes[x.type] = (liftTypes[x.type] ?? 0) + 1;
+  const liftTypes: Record<string, number> = {};
+  for (const x of l) {
+    const label = liftLabel(x, types);
+    liftTypes[label] = (liftTypes[label] ?? 0) + 1;
+  }
+  const runKm = r.reduce((a, x) => a + x.distanceKm, 0);
+  const runMinutes = r.reduce((a, x) => a + x.durationMin, 0);
   return {
     start,
     end,
     avgSteps: s.length ? s.reduce((a, x) => a + x.steps, 0) / s.length : null,
     stepDays: s.length,
     runCount: r.length,
-    runKm: r.reduce((a, x) => a + x.distanceKm, 0),
-    runMinutes: r.reduce((a, x) => a + x.durationMin, 0),
+    runKm,
+    runMinutes,
+    avgPaceMinPerKm: runKm > 0 && runMinutes > 0 ? runMinutes / runKm : null,
     liftCount: l.length,
     liftMinutes: l.reduce((a, x) => a + x.durationMin, 0),
     liftTypes,

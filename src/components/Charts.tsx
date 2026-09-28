@@ -256,3 +256,56 @@ function DataTable({ head, rows }: { head: string[]; rows: string[][] }) {
     </details>
   );
 }
+
+export interface BandDatum {
+  date: string;
+  avg7: number | null;
+  min: number;
+  max: number;
+}
+
+/** A 7-day average line against a shaded target band (min–max; a single line when min = max). */
+export function BandChart({ data, label, unit }: { data: readonly BandDatum[]; label: string; unit: string }) {
+  const titleId = useId();
+  const f = bandFrame(data);
+  const hover = useHover(data, f);
+  if (!data.length) return null;
+  const { x, y } = scales(f);
+  const pts = data.filter((d) => d.avg7 != null);
+  const line = pts.map((d, i) => `${i ? 'L' : 'M'}${x(d.date).toFixed(1)},${y(d.avg7!).toFixed(1)}`).join('');
+  const top = data.map((d, i) => `${i ? 'L' : 'M'}${x(d.date).toFixed(1)},${y(d.max).toFixed(1)}`).join('');
+  const bottom = [...data].reverse().map((d) => `L${x(d.date).toFixed(1)},${y(d.min).toFixed(1)}`).join('');
+  const single = data.every((d) => d.min === d.max);
+  const h = hover.idx != null ? data[hover.idx] : [...data].reverse().find((d) => d.avg7 != null) ?? data[data.length - 1];
+  return (
+    <div className="chart">
+      <div className="chart-tip" aria-live="polite">
+        <b>{label}</b> · {formatDateShort(h.date)} · 7-day avg <b>{h.avg7 != null ? Math.round(h.avg7) : '—'}</b> {unit} · target{' '}
+        {single ? h.max : `${h.min}–${h.max}`} {unit}
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-labelledby={titleId} onPointerMove={hover.onMove} onPointerDown={hover.onMove} onPointerLeave={hover.clear}>
+        <title id={titleId}>{`${label}: 7-day average vs target`}</title>
+        <Axes f={f} digits={0} />
+        {single ? (
+          <path d={top} fill="none" stroke="var(--text-2)" strokeWidth={1.5} strokeDasharray="5 4" />
+        ) : (
+          <path d={`${top}${bottom}Z`} fill="var(--text-2)" fillOpacity={0.14} stroke="none" />
+        )}
+        {hover.hoverX != null ? <line x1={hover.hoverX} x2={hover.hoverX} y1={PAD.t} y2={H - PAD.b} stroke="var(--text-2)" strokeWidth={1} /> : null}
+        <path d={line} fill="none" stroke="var(--series-1)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+      <div className="legend">
+        <span>
+          <i style={{ background: 'var(--series-1)', height: 3, borderRadius: 2 }} /> 7-day average
+        </span>
+        <span>{single ? '- - Target' : '▒ Target range'}</span>
+      </div>
+    </div>
+  );
+}
+
+function bandFrame(data: readonly BandDatum[]): Frame {
+  if (!data.length) return { start: '2000-01-01', end: '2000-01-02', yMin: 0, yMax: 1 };
+  const vals = data.flatMap((d) => [d.max, d.avg7 ?? 0]);
+  return { start: data[0].date, end: data[data.length - 1].date, yMin: 0, yMax: Math.max(...vals) * 1.15 || 1 };
+}

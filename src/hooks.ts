@@ -177,3 +177,10 @@ export function useFoodBoost(today: ISODate): Map<string, number> {
     return m;
   }, [favs, recents]);
 }
+
+const NO_LIFTS: LiftEntry[] = [];
+
+/** All (non-deleted) lifts, for rotation/overdue logic. */
+export function useLifts(): LiftEntry[] {
+  return useLiveQuery(async () => live(await db.lifts.toArray()), [], NO_LIFTS);
+}
