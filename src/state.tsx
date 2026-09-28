@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { todayISO } from './lib/dates';
-import type { ISODate } from './lib/types';
+import { mealForTime, todayISO } from './lib/dates';
+import type { ISODate, Meal } from './lib/types';
 
 export type Tab = 'today' | 'log' | 'progress' | 'training' | 'foods' | 'settings';
 export const TABS: readonly Tab[] = ['today', 'log', 'progress', 'training', 'foods', 'settings'];
@@ -22,6 +22,9 @@ interface AppState {
   route: Route;
   go: (tab: Tab, sub?: string | null) => void;
   toast: (text: string, action?: ToastMsg['action']) => void;
+  /** Meal new log items go into (auto-picked from the time of day, editable). */
+  logMeal: Meal;
+  setLogMeal: (m: Meal) => void;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -36,6 +39,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [date, setDate] = useState<ISODate>(todayISO());
   const [route, setRoute] = useState<Route>(parseHash);
   const [toastMsg, setToastMsg] = useState<ToastMsg | null>(null);
+  const [logMeal, setLogMeal] = useState<Meal>(() => mealForTime());
 
   useEffect(() => {
     const onHash = () => setRoute(parseHash());
@@ -49,6 +53,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const onVis = () => {
       if (document.visibilityState !== 'visible') return;
       const now = todayISO();
+      setLogMeal(mealForTime());
       if (now !== last) {
         setDate((d) => (d === last ? now : d));
         last = now;
@@ -75,7 +80,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t);
   }, [toastMsg]);
 
-  const value = useMemo(() => ({ date, setDate, route, go, toast }), [date, route, go, toast]);
+  const value = useMemo(() => ({ date, setDate, route, go, toast, logMeal, setLogMeal }), [date, route, go, toast, logMeal]);
   return (
     <Ctx.Provider value={value}>
       {children}

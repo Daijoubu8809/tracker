@@ -156,6 +156,11 @@ export interface Food {
   servingGrams?: number;
   /** e.g. "12 fl oz can", "1 bar (40 g)" */
   servingName?: string;
+  /**
+   * Per-food overrides: grams in ONE of a household unit, e.g. a salad-bar
+   * dressing ladle (≈2 tbsp) or a protein-powder scoop (≈31 g).
+   */
+  gramsPer?: Partial<Record<PortionUnit, number>>;
   /** Portion used when none is typed. */
   defaultUnit: PortionUnit;
   /** Typical estimate error in % (±). */

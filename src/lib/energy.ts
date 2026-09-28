@@ -216,3 +216,16 @@ export function runKcal(distanceKm: number, weightKg: number): number {
 export function liftKcal(durationMin: number, weightKg: number): number {
   return 4 * weightKg * (durationMin / 60);
 }
+
+/** Steps a sedentary day already includes (covered by the 1.2 multiplier). */
+export const BASELINE_STEPS = 4000;
+
+export function dayExerciseKcal(
+  day: { steps: number | null; runs: { distanceKm: number }[]; lifts: { durationMin: number }[] },
+  weightKg: number,
+): number {
+  const s = day.steps != null ? stepsKcal(Math.max(0, day.steps - BASELINE_STEPS), weightKg) : 0;
+  const r = day.runs.reduce((sum, x) => sum + runKcal(x.distanceKm, weightKg), 0);
+  const l = day.lifts.reduce((sum, x) => sum + liftKcal(x.durationMin, weightKg), 0);
+  return s + r + l;
+}
