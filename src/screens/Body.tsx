@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { useEffect, useState } from 'react';
 import { NumField, Sheet } from '../components/ui';
 import { useSettings, useWeighIn, useWeightKg } from '../hooks';
 import { db } from '../lib/db';
@@ -57,5 +58,32 @@ export function QuickWeighIn({ date, onClose }: { date: ISODate; onClose: () => 
         </button>
       </div>
     </Sheet>
+  );
+}
+
+/** Optional free-text note for a day ("high sodium dinner", "slept badly"). */
+export function DayNoteField({ date }: { date: ISODate }) {
+  const note = useLiveQuery(async () => (await db.notes.get(date)) ?? null, [date]);
+  const [text, setText] = useState<string | null>(null);
+  const shown = text ?? (note && !note.deleted ? note.text : '');
+  useEffect(() => setText(null), [date]);
+  const save = () => {
+    if (text == null) return;
+    void db.notes.put({ id: date, date, text: text.trim(), updatedAt: Date.now() });
+  };
+  return (
+    <div className="field">
+      <label htmlFor={`note-${date}`}>Note for the day (optional)</label>
+      <textarea
+        id={`note-${date}`}
+        className="input"
+        rows={2}
+        style={{ minHeight: 60 }}
+        placeholder="e.g. high sodium dinner, slept badly"
+        value={shown}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={save}
+      />
+    </div>
   );
 }

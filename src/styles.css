@@ -16,6 +16,8 @@
   --carbs: #b7791f;
   --fat: #2f6fb3;
   --chart-grid: #e1e6e3;
+  --series-1: #00897b;
+  --series-2: #b86e00;
   --focus: #2563eb;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 16px rgb(0 0 0 / 0.06);
   --radius: 14px;
@@ -46,6 +48,8 @@
   --carbs: #f0b45a;
   --fat: #7cb8ff;
   --chart-grid: #24352f;
+  --series-1: #1aa594;
+  --series-2: #c98416;
   --focus: #93c5fd;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
   color-scheme: dark;
@@ -716,4 +720,15 @@ video.scanner {
 .chip svg {
   width: 18px;
   height: 18px;
+}
+
+.chart {
+  position: relative;
+  touch-action: pan-y;
+}
+.chart-tip {
+  min-height: 1.4em;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
 }

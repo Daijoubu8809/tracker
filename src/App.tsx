@@ -5,6 +5,8 @@ import { Settings } from './screens/Settings';
 import { Today } from './screens/Today';
 import { Log } from './screens/Log';
 import { Foods } from './screens/Foods';
+import { Progress } from './screens/Progress';
+import { Training } from './screens/Training';
 
 const LABELS: Record<Tab, string> = {
   today: 'Today',
@@ -34,6 +36,12 @@ export function App() {
       break;
     case 'log':
       screen = <Log />;
+      break;
+    case 'progress':
+      screen = <Progress />;
+      break;
+    case 'training':
+      screen = <Training />;
       break;
     case 'foods':
       screen = <Foods />;

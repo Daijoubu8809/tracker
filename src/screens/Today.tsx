@@ -12,7 +12,7 @@ import { useApp } from '../state';
 import { BackupReminder } from './Backup';
 import { copyMeal, MealActions } from './SavedMeals';
 import { deleteEntries } from '../lib/log';
-import { QuickWeighIn } from './Body';
+import { DayNoteField, QuickWeighIn } from './Body';
 
 export function Today() {
   const { date, go, setLogMeal, toast } = useApp();
@@ -180,6 +180,10 @@ export function Today() {
           </section>
         );
       })}
+
+      <section className="card">
+        <DayNoteField date={date} />
+      </section>
 
       <div className="fab-wrap">
         <button type="button" className="btn primary big" onClick={() => go('log', 'quick')}>

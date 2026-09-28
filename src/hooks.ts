@@ -5,7 +5,8 @@ import { defaultSettings } from './lib/defaults';
 import { computeTargets, dayExerciseKcal, type DailyTargets } from './lib/energy';
 import type { ISODate, LiftEntry, LogEntry, RunEntry, Settings, WeightEntry } from './lib/types';
 import { mergeFoods, type FoodRecord } from './lib/foods';
-import { addDays } from './lib/dates';
+import { addDays, todayISO } from './lib/dates';
+import { adaptiveMaintenance, emaTrend, type AdaptiveResult, type Point } from './lib/trend';
 
 const DEFAULTS = defaultSettings();
 
@@ -13,22 +14,62 @@ export function useSettings(): Settings {
   return useLiveQuery(() => getSettings(), [], DEFAULTS);
 }
 
-/** Current body weight: latest weigh-in on/before `date`, else the profile weight. */
+const NO_POINTS: Point[] = [];
+
+/** All weigh-ins (kg), oldest first. */
+export function useWeights(): Point[] {
+  return useLiveQuery(
+    async () => live(await db.weights.toArray()).map((w) => ({ date: w.date, value: w.kg })).sort((a, b) => a.date.localeCompare(b.date)),
+    [],
+    NO_POINTS,
+  );
+}
+
+/** All waist entries (cm), oldest first. */
+export function useWaists(): Point[] {
+  return useLiveQuery(
+    async () => live(await db.waists.toArray()).map((w) => ({ date: w.date, value: w.cm })).sort((a, b) => a.date.localeCompare(b.date)),
+    [],
+    NO_POINTS,
+  );
+}
+
+/** Current body weight: smoothed trend up to `date`, else the profile weight. */
 export function useWeightKg(date: ISODate): number {
   const settings = useSettings();
-  const w = useLiveQuery(async () => {
-    const rows = live(await db.weights.where('date').belowOrEqual(date).toArray());
-    rows.sort((a, b) => a.date.localeCompare(b.date));
-    return rows.length ? rows[rows.length - 1].kg : null;
-  }, [date]);
-  return w ?? settings.profile.weightKg;
+  const weights = useWeights();
+  return useMemo(() => {
+    const upTo = weights.filter((w) => w.date <= date);
+    const t = emaTrend(upTo);
+    return t.length ? t[t.length - 1].trend : settings.profile.weightKg;
+  }, [weights, date, settings.profile.weightKg]);
+}
+
+/** Adaptive maintenance from the last 28 complete days (ending yesterday). */
+export function useAdaptive(): AdaptiveResult {
+  const today = todayISO();
+  const end = addDays(today, -1);
+  const entries = useEntriesRange(addDays(end, -27), end);
+  const weights = useWeights();
+  return useMemo(() => {
+    const intake = new Map<ISODate, number>();
+    for (const e of entries) intake.set(e.date, (intake.get(e.date) ?? 0) + e.kcal);
+    return adaptiveMaintenance({ intake, weights, end });
+  }, [entries, weights, end]);
 }
 
 export function useTargets(date: ISODate): DailyTargets {
   const settings = useSettings();
   const weightKg = useWeightKg(date);
   const exercise = useDayExercise(date);
-  return computeTargets({ settings, date, weightKg, adaptiveMaintenance: null, exerciseKcal: exercise.kcal });
+  const adaptive = useAdaptive();
+  return computeTargets({
+    settings,
+    date,
+    weightKg,
+    adaptiveMaintenance: adaptive.ok ? adaptive.maintenance : null,
+    exerciseKcal: exercise.kcal,
+  });
 }
 
 export interface DayExercise {
