@@ -47,7 +47,8 @@ export function searchFoods(query: string, foods: readonly FoodRecord[], boost: 
     const base = bestNameScore(q, food);
     if (base < 0.45) continue;
     const bonus = Math.min(0.04, boost.get(food.id) ?? 0) + (food.builtin ? 0 : 0.01);
-    scored.push({ food, score: Math.min(1, base + bonus) });
+    // Not capped at 1, so the bonus can break ties between two exact matches.
+    scored.push({ food, score: base + bonus });
   }
   scored.sort((a, b) => b.score - a.score || a.food.name.length - b.food.name.length);
   return scored.slice(0, limit);
