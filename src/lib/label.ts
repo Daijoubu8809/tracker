@@ -30,6 +30,9 @@ export interface LabelInput {
   protein: number;
   carbs: number;
   fat: number;
+  /** Optional extras from the label (per serving). */
+  fiber?: number | null;
+  sodiumMg?: number | null;
   servingsEaten: number;
 }
 
@@ -54,10 +57,22 @@ export function labelToFood(l: LabelInput, id = `c:${newId()}`): Food {
       protein100: r1(l.protein * f),
       carbs100: r1(l.carbs * f),
       fat100: r1(l.fat * f),
+      ...(l.fiber != null ? { fiber100: r1(l.fiber * f) } : {}),
+      ...(l.sodiumMg != null ? { sodium100: Math.round(l.sodiumMg * f) } : {}),
       servingGrams: l.servingGrams,
     };
   }
-  return { ...common, nominal: true, kcal100: l.calories, protein100: l.protein, carbs100: l.carbs, fat100: l.fat, servingGrams: 100 };
+  return {
+    ...common,
+    nominal: true,
+    kcal100: l.calories,
+    protein100: l.protein,
+    carbs100: l.carbs,
+    fat100: l.fat,
+    ...(l.fiber != null ? { fiber100: l.fiber } : {}),
+    ...(l.sodiumMg != null ? { sodium100: l.sodiumMg } : {}),
+    servingGrams: 100,
+  };
 }
 
 export function labelToItem(l: LabelInput, foodId: string | null): LoggedItem {
@@ -73,6 +88,8 @@ export function labelToItem(l: LabelInput, foodId: string | null): LoggedItem {
     protein: Math.round(l.protein * s * 10) / 10,
     carbs: Math.round(l.carbs * s * 10) / 10,
     fat: Math.round(l.fat * s * 10) / 10,
+    ...(l.fiber != null ? { fiber: Math.round(l.fiber * s * 10) / 10 } : {}),
+    ...(l.sodiumMg != null ? { sodium: Math.round(l.sodiumMg * s) } : {}),
     uncertaintyPct: 10,
     source: 'label',
   };

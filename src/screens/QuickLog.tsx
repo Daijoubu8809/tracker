@@ -8,6 +8,7 @@ import { MEAL_LABEL } from '../lib/log';
 import { parseQuickText, withFood, type ParsedItem } from '../lib/parser';
 import { roundRange, sumItems } from '../lib/portions';
 import { useApp } from '../state';
+import { useScanLabel } from '../components/ScanLabel';
 import { newCustomFood, FoodEditor } from './FoodEditor';
 import { useLogItems } from './Log';
 
@@ -27,6 +28,7 @@ export function QuickLog() {
   const { portionRefs } = useSettings();
   const boost = useFoodBoost(todayISO());
   const { logMeal, go } = useApp();
+  const { scanWithCamera } = useScanLabel();
   const logItems = useLogItems();
   const [text, setText] = useState(readDraft);
   /** User edits to parsed items, keyed by position + raw text. */
@@ -75,20 +77,25 @@ export function QuickLog() {
       <label htmlFor="quick-text" className="small muted">
         Describe what you ate, separated by commas
       </label>
-      <textarea
-        id="quick-text"
-        className="input"
-        autoFocus
-        rows={3}
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
-        placeholder="half plate fried rice, palm of orange chicken, fist broccoli, 2 cookies"
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-        }}
-      />
+      <div className="row" style={{ alignItems: 'flex-start' }}>
+        <textarea
+          id="quick-text"
+          className="input grow"
+          autoFocus
+          rows={3}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="half plate fried rice, palm of orange chicken, fist broccoli, 2 cookies"
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+          }}
+        />
+        <button type="button" className="icon-btn" aria-label="Scan a nutrition label" title="Scan a nutrition label" onClick={scanWithCamera}>
+          <Icon name="camera" />
+        </button>
+      </div>
       {rows.length ? (
         <ul className="list" aria-label="Preview">
           {rows.map(({ key, item: p }) => (

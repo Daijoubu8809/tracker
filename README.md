@@ -106,6 +106,12 @@ The app has no built-in AI. The Claude app acts as its scanner:
 If the JSON is broken, the app tells you what’s wrong, for example “calories is missing” or “broken near line 3”.
 It never crashes, and it never quietly skips an item.
 
+**Scan label (on-device, free):** Log → **Scan label** (or the 📷 next to the quick-text box) opens the rear camera;
+**From photos** picks an existing photo. The app straightens the photo, converts it to high-contrast black & white, and reads it
+with Tesseract OCR *on your phone* — no account, no API key, the photo never leaves the device. The first scan downloads the
+scanner (~7 MB) once; after that it works offline. You always review the numbers before anything is logged: hard-to-read
+values are highlighted **Check this**, and the app cross-checks 4×protein + 4×carbs + 9×fat against the calories.
+
 **Barcode scanning:** Log → Label → **Scan barcode** uses your camera and the free Open Food Facts database to fill in the
 label form. If the camera isn’t available, type the barcode number instead.
 

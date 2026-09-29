@@ -3,7 +3,8 @@ import { DateSwitcher } from '../components/DateSwitcher';
 import { FoodPicker } from '../components/FoodPicker';
 import { MealPicker } from '../components/MealPicker';
 import { PortionPicker } from '../components/PortionPicker';
-import { Segmented, Sheet } from '../components/ui';
+import { Icon, Segmented, Sheet } from '../components/ui';
+import { ScanLabelProvider, useScanLabel } from '../components/ScanLabel';
 import { useSettings } from '../hooks';
 import type { FoodRecord } from '../lib/foods';
 import { addItems, deleteEntries, MEAL_LABEL } from '../lib/log';
@@ -40,7 +41,16 @@ export function useLogItems() {
 }
 
 export function Log() {
+  return (
+    <ScanLabelProvider>
+      <LogScreen />
+    </ScanLabelProvider>
+  );
+}
+
+function LogScreen() {
   const { route, go, logMeal, setLogMeal } = useApp();
+  const { scanWithCamera, scanFromLibrary } = useScanLabel();
   const tab: LogTab = LOG_TABS.some((t) => t.value === route.sub) ? (route.sub as LogTab) : 'quick';
   return (
     <div className="page">
@@ -49,6 +59,14 @@ export function Log() {
       </div>
       <DateSwitcher />
       <MealPicker value={logMeal} onChange={setLogMeal} />
+      <div className="row">
+        <button type="button" className="btn grow" onClick={scanWithCamera}>
+          <Icon name="camera" /> Scan label
+        </button>
+        <button type="button" className="btn" onClick={scanFromLibrary}>
+          From photos
+        </button>
+      </div>
       <Segmented label="Log method" options={LOG_TABS} value={tab} onChange={(t) => go('log', t)} />
       <section className="card">
         {tab === 'quick' ? <QuickLog /> : null}

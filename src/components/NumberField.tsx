@@ -61,6 +61,8 @@ interface CommonProps {
   onBlur?: () => void;
   /** External error to show (e.g. a combined ft/in range message). */
   errorOverride?: string | null;
+  /** Amber "Check this" note (e.g. a low-confidence scanned value). Clears once you edit the field. */
+  attention?: string | null;
 }
 
 type Props =
@@ -138,11 +140,13 @@ function NumberFieldView({
   onFocus,
   onEnter,
   errorOverride,
+  attention,
 }: CommonProps & { field: NumberFieldState; onFocus?: () => void; onEnter?: () => void }) {
   const autoId = useId();
   const inputId = id ?? autoId;
   const msgId = `${inputId}-msg`;
   const error = errorOverride ?? field.error;
+  const check = !error && attention && !field.dirty ? attention : null;
   const integer = field.rules.integer && !field.rules.parse;
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -160,7 +164,7 @@ function NumberFieldView({
       <div className="input-with-unit">
         <input
           id={inputId}
-          className="input num"
+          className={check ? 'input num attention' : 'input num'}
           type="text"
           inputMode={integer ? 'numeric' : 'decimal'}
           pattern={integer ? '[0-9]*' : undefined}
@@ -171,7 +175,7 @@ function NumberFieldView({
           placeholder={placeholder}
           value={field.text}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error || hint ? msgId : undefined}
+          aria-describedby={error || check || hint ? msgId : undefined}
           onChange={(e) => field.setText(e.target.value)}
           onFocus={onFocus}
           onBlur={() => {
@@ -185,6 +189,10 @@ function NumberFieldView({
       {error ? (
         <span id={msgId} className="field-msg" role="status">
           {error}
+        </span>
+      ) : check ? (
+        <span id={msgId} className="field-msg attention-msg">
+          <b>Check this:</b> {check}
         </span>
       ) : hint ? (
         <span id={msgId} className="small muted">

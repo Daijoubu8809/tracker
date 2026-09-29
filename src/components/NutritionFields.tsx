@@ -24,14 +24,25 @@ export function useNutritionFields(initial: Partial<NutritionValues> | null, max
   return { kcal, protein, carbs, fat, all: [kcal, protein, carbs, fat] };
 }
 
-export function NutritionInputs({ f, kcalLabel = 'Calories', macroLabels }: { f: NutritionFieldsState; kcalLabel?: string; macroLabels?: [string, string, string] }) {
+export function NutritionInputs({
+  f,
+  kcalLabel = 'Calories',
+  macroLabels,
+  attention,
+}: {
+  f: NutritionFieldsState;
+  kcalLabel?: string;
+  macroLabels?: [string, string, string];
+  /** Amber "Check this" notes per field (e.g. from a scanned label). */
+  attention?: Partial<Record<keyof NutritionValues, string>>;
+}) {
   const [p, c, fa] = macroLabels ?? ['Protein', 'Carbs', 'Fat'];
   return (
     <div className="grid-2">
-      <NumberField label={kcalLabel} unit="kcal" field={f.kcal} />
-      <NumberField label={p} unit="g" field={f.protein} />
-      <NumberField label={c} unit="g" field={f.carbs} />
-      <NumberField label={fa} unit="g" field={f.fat} />
+      <NumberField label={kcalLabel} unit="kcal" field={f.kcal} attention={attention?.kcal} />
+      <NumberField label={p} unit="g" field={f.protein} attention={attention?.protein} />
+      <NumberField label={c} unit="g" field={f.carbs} attention={attention?.carbs} />
+      <NumberField label={fa} unit="g" field={f.fat} attention={attention?.fat} />
     </div>
   );
 }
