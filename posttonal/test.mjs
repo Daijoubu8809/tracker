@@ -52,7 +52,26 @@ same(F.parse('0 1 4 t'), [0, 1, 4, 10]);
 same(F.parse('014e'), [0, 1, 4, 11]);
 same(F.parse('Db F Ab'), [1, 5, 8]);
 same(F.parse('c e g#'), [0, 4, 8]);
-same(F.parse('ab'), [10, 11]);
+same(F.parse('abcdefg'), [0, 2, 4, 5, 7, 9, 11]);
+same(F.parse('A B'), [9, 11]);
+same(F.parse('DbFAb'), [1, 5, 8]);
+same(F.parse('Bb D F'), [2, 5, 10]);
+same(F.parse('eb g bb'), [3, 7, 10]);
+same(F.parse('c#eg#'), [1, 4, 8]);
+same(F.parse('t e 0'), [0, 10, 11]);
+same(F.parse('0 1 a b'), [0, 1, 10, 11]);
+assert.throws(() => F.parse('C H'));
+
+// Shown work agrees with the direct computation for every subset.
+for (let m = 1; m < 4096; m++) {
+  const s = [...Array(12).keys()].filter((i) => (m >> i) & 1);
+  const st = F.primeFormSteps(s);
+  same(st.original.normal, F.normalForm(s));
+  same(st.prime, F.primeForm(s));
+}
+const st = F.normalFormSteps([0, 1, 3, 7, 8]);
+same(st.normal, [0, 1, 3, 7, 8]);
+same(st.rounds.map((r) => r.j), [4, 1, 2]);
 assert.throws(() => F.parse('0 13'));
 
 same(F.relate([0, 1, 4], [5, 6, 9]), ['T5']);

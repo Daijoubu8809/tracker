@@ -63,6 +63,35 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .entry input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
 .hint { font-size: 12.5px; color: var(--muted); }
+.entry-row { display: flex; gap: 8px; }
+.entry-row input { flex: 1; min-width: 0; }
+.play { flex: none; border: 0; border-radius: 10px; padding: 0 14px; background: var(--accent); color: var(--accent-fg); font-weight: 600; font-size: 14px; }
+.play:disabled { opacity: .45; cursor: default; }
+.clock .nname { fill: var(--muted); font: 500 11px var(--body); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+
+.steps { display: grid; gap: 18px; counter-reset: step; }
+.step { display: grid; grid-template-columns: 30px 1fr; gap: 4px 12px; align-items: start; }
+.step > .num { counter-increment: step; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; font: 700 13px var(--display); }
+.step > .num::before { content: counter(step); }
+.step > div { min-width: 0; display: grid; gap: 8px; }
+.step h3 { margin: 2px 0 0; font: 700 16px/1.3 var(--display); }
+.step p { margin: 0; max-width: 68ch; }
+.notechips { display: flex; flex-wrap: wrap; gap: 6px; }
+.notechips span { border: 1px solid var(--line); border-radius: 8px; padding: 3px 9px; font-family: var(--mono); background: var(--bg); }
+.notechips span b { font-family: var(--body); font-weight: 600; }
+.notechips span.dup { opacity: .45; text-decoration: line-through; }
+.rot { border-collapse: collapse; font-size: 13.5px; width: auto; }
+.rot th, .rot td { padding: 5px 7px; border-bottom: 1px solid var(--line); text-align: center; }
+.rot th { position: static; font-size: 10.5px; }
+.rot td:first-child, .rot th:first-child { text-align: left; }
+.rot td small { display: block; font: 11px var(--body); color: var(--muted); }
+.rot tr.out td { opacity: .42; }
+.rot tr.win td { background: var(--accent-soft); font-weight: 600; }
+.rot td.key { outline: 2px solid var(--accent); outline-offset: -3px; border-radius: 5px; }
+.result-line { font-family: var(--mono); font-size: 17px; }
+.result-line b { color: var(--accent); }
+details.inv summary { cursor: pointer; color: var(--accent); font-size: 14px; }
+details.inv[open] summary { margin-bottom: 8px; }
 .err { font-size: 13px; color: var(--warn); min-height: 1.2em; }
 
 .clock { width: 100%; max-width: 300px; aspect-ratio: 1; justify-self: center; display: block; touch-action: manipulation; }
@@ -142,8 +171,11 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
     <section class="panel" aria-label="Enter a set">
       <div class="entry">
         <label class="label" for="pcs">Pitch classes or note names</label>
-        <input id="pcs" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" value="7 E 2 5">
-        <div class="hint">Try <span class="mono">0 1 4 6</span>, <span class="mono">014t</span>, or <span class="mono">Db F A</span>. Or tap the clock.</div>
+        <div class="entry-row">
+          <input id="pcs" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" value="G B D F">
+          <button type="button" class="play" id="play" aria-label="Play these notes">▶ Play</button>
+        </div>
+        <div class="hint">Type notes like <span class="mono">G B D F</span>, <span class="mono">abcdefg</span>, <span class="mono">C# E G#</span> or <span class="mono">Db F Ab</span>. Numbers work too: <span class="mono">0 1 4 6</span>. Or tap the clock.</div>
         <div class="err" id="err" role="status"></div>
       </div>
       <svg class="clock" id="clock" viewBox="0 0 300 300" role="group" aria-label="Pitch-class clock"></svg>
@@ -163,6 +195,11 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
 
     <section class="panel" aria-label="Analysis" id="analysis" aria-live="polite"></section>
   </div>
+
+  <section class="panel" aria-label="Step by step">
+    <h2>Step by step: how to get the prime form</h2>
+    <div class="steps" id="steps"></div>
+  </section>
 
   <section class="panel" aria-label="Compare two sets">
     <h2>Compare with another set</h2>
@@ -220,8 +257,15 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
   const NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+  // Spellings the parser reads back, used when the user is typing note names.
+  const SPELL = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+  let inputStyle = 'notes';
+  let tokens = [];
+  const writeSet = (pcs) => pcs.map((x) => inputStyle === 'notes' ? SPELL[x] : pc(x)).join(' ');
+
   function setInput(pcs) {
-    $('pcs').value = pcs.map(pc).join(' ');
+    $('pcs').value = writeSet(pcs);
+    tokens = F.parseTokens($('pcs').value);
     $('err').textContent = '';
     current = pcs;
     render();
@@ -232,6 +276,7 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
   const R = 112, C = 150;
   const pos = (i, r = R) => [C + r * Math.sin((i * Math.PI) / 6), C - r * Math.cos((i * Math.PI) / 6)];
   clock.innerHTML = `<circle class="ring" cx="${C}" cy="${C}" r="${R}"></circle><polygon class="poly" id="poly" points=""></polygon>` +
+    [...Array(12).keys()].map((i) => { const [x, y] = pos(i, 141); return `<text class="nname" x="${x}" y="${y}">${NAMES[i]}</text>`; }).join('') +
     [...Array(12).keys()].map((i) => {
       const [x, y] = pos(i);
       return `<g class="node" data-pc="${i}" tabindex="0" role="button" aria-label="Pitch class ${i} (${NAMES[i]})"><circle cx="${x}" cy="${y}" r="19"></circle><text x="${x}" y="${y}" id="nodelabel${i}">${i}</text></g>`;
@@ -258,6 +303,8 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
 
   function render() {
     drawClock();
+    renderSteps();
+    $('play').disabled = !current.length;
     const out = $('analysis');
     if (!current.length) {
       out.innerHTML = `<div class="label">Analysis</div><p style="margin:0;color:var(--muted)">Enter pitch classes or tap the clock to see the set's Forte name, prime form and interval vector.</p>`;
@@ -301,9 +348,15 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
   });
 
   // ---- input ----
+  function readInput() {
+    const v = $('pcs').value;
+    tokens = F.parseTokens(v);
+    if (v.trim()) inputStyle = /\d/.test(v) ? 'numbers' : 'notes';
+    current = [...new Set(tokens.map((t) => t.pc))].sort((a, b) => a - b);
+  }
   $('pcs').addEventListener('input', () => {
     try {
-      current = F.parse($('pcs').value);
+      readInput();
       $('err').textContent = '';
       render();
     } catch (err) {
@@ -409,7 +462,7 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
   // ---- notation ----
   function applyNotation() {
     $('notation').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.n === notation));
-    $('pcs').value = current.map(pc).join(' ');
+    if (inputStyle === 'numbers') $('pcs').value = writeSet(current);
     render();
     renderTable();
   }
@@ -421,7 +474,132 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
     applyNotation();
   });
 
-  current = F.parse($('pcs').value);
+  // ---- step by step ----
+  const ord = (k) => k + 1 + (['st', 'nd', 'rd'][k] && k < 3 ? ['st', 'nd', 'rd'][k] : 'th');
+  const gapName = (j, n) => j === n - 1 ? 'first → last' : `first → ${ord(j)}`;
+  const nums = (pcs) => pcs.map(pc).join(' ');
+  const notesOf = (pcs) => pcs.map((x) => NAMES[x]).join(' ');
+
+  function rotationTable(st) {
+    const n = st.pcs.length;
+    const out = new Set(st.rotations.map((_, i) => i).filter((i) => !st.rounds.length || !st.rounds[st.rounds.length - 1].kept.includes(i)));
+    // The comparison that eliminated each rotation, so that cell can be outlined.
+    const killedAt = {};
+    for (const r of st.rounds) for (const i of r.before) if (!r.kept.includes(i) && killedAt[i] === undefined) killedAt[i] = r.j;
+    const cols = [n - 1, ...[...Array(n - 2).keys()].map((k) => k + 1)];
+    const head = `<tr><th>Rotation</th>${cols.map((j) => `<th>1st→${j === n - 1 ? 'last' : ord(j)}</th>`).join('')}</tr>`;
+    const rows = st.rotations.map((r, i) => {
+      const cls = i === st.winner ? 'win' : out.has(i) ? 'out' : '';
+      const decisive = killedAt[i];
+      return `<tr class="${cls}"><td class="mono">${nums(r.order)}<small>${notesOf(r.order)}</small></td>${cols.map((j) => `<td class="mono${decisive === j ? ' key' : ''}">${r.dist[j]}</td>`).join('')}</tr>`;
+    }).join('');
+    return `<div class="table-wrap" style="max-height:none"><table class="rot">${head}${rows}</table></div>`;
+  }
+
+  function roundsText(st) {
+    const n = st.pcs.length;
+    if (n < 2) return '<p>With one note there is nothing to compare.</p>';
+    const r0 = st.rounds[0];
+    const parts = [];
+    parts.push(r0.kept.length === 1
+      ? `Only one rotation has the smallest span from first to last (${r0.min}), so it wins.`
+      : `${r0.kept.length} rotations tie for the smallest span from first to last (${r0.min}).`);
+    for (const r of st.rounds.slice(1)) {
+      parts.push(r.kept.length === r.before.length
+        ? `They also tie ${gapName(r.j, n)} (${r.min}).`
+        : `Forte breaks the tie with the interval ${gapName(r.j, n)}: the smallest is ${r.min}${r.kept.length === 1 ? ', so that rotation wins' : ''}.`);
+    }
+    if (st.tiedAtEnd) parts.push(`They still tie, because the set is symmetrical. Take the one that starts on the lowest number.`);
+    return `<p>${parts.join(' ')}</p>`;
+  }
+
+  function renderSteps() {
+    const out = $('steps');
+    if (!current.length) { out.innerHTML = '<p style="color:var(--muted);margin:0">Type some notes above to see the work.</p>'; return; }
+    const ps = F.primeFormSteps(current);
+    const e = F.byPrime[F.key(ps.prime)];
+    const seen = new Set();
+    const chips = tokens.map((t) => {
+      const dup = seen.has(t.pc); seen.add(t.pc);
+      return `<span class="${dup ? 'dup' : ''}"><b>${esc(t.label)}</b> = ${pc(t.pc)}</span>`;
+    }).join('');
+    const hasDup = tokens.length > current.length;
+    const n = current.length;
+    const zeroA = ps.original.normal.map((x) => `${pc(x)} − ${pc(ps.original.normal[0])} = ${pc(F.mod12(x - ps.original.normal[0]))}`);
+    let decideText;
+    if (ps.winner === 'same') decideText = `Both are the same, so the set is inversionally symmetrical and either one is the prime form.`;
+    else decideText = `They first differ ${gapName(ps.decided.j, n)}: ${ps.decided.a} vs ${ps.decided.b}. The smaller one, the ${ps.winner === 'original' ? 'original' : 'inversion'}, is packed tighter to the left, so it is the prime form.`;
+    const sameSpan = ps.a[n - 1] === ps.b[n - 1];
+    out.innerHTML = `
+      <div class="step"><span class="num"></span><div>
+        <h3>Turn the notes into numbers</h3>
+        <p>C = 0, C♯/D♭ = 1, D = 2 … B = 11. Octave and spelling don't matter.${hasDup ? ' Repeated pitch classes count once.' : ''}</p>
+        <div class="notechips">${chips}</div>
+      </div></div>
+      <div class="step"><span class="num"></span><div>
+        <h3>Put them in order, low to high</h3>
+        <p class="result-line">${nums(ps.original.pcs)} <span class="hint">(${notesOf(ps.original.pcs)})</span></p>
+      </div></div>
+      <div class="step"><span class="num"></span><div>
+        <h3>Find the normal order</h3>
+        <p>Start the list on each note in turn. Each number in the table is how many half steps that note is above the first one. Keep the rotation with the smallest span from first to last.</p>
+        ${rotationTable(ps.original)}
+        ${roundsText(ps.original)}
+        <p class="result-line">Normal order: <b>[${nums(ps.original.normal)}]</b></p>
+      </div></div>
+      <div class="step"><span class="num"></span><div>
+        <h3>Transpose it to start on 0</h3>
+        <p>Subtract the first number from every number (add 12 if you go below 0): ${zeroA.join(', ')}.</p>
+        <p class="result-line">(${nums(ps.a)})</p>
+      </div></div>
+      <div class="step"><span class="num"></span><div>
+        <h3>Do the same for the inversion</h3>
+        <p>Invert each pitch class (12 − x): ${ps.original.pcs.map((x) => `${pc(x)} → ${pc((12 - x) % 12)}`).join(', ')}. Then find that set's normal order and transpose it to 0.</p>
+        <details class="inv"><summary>Show the inversion's rotations</summary>
+          ${rotationTable(ps.inversion)}
+          ${roundsText(ps.inversion)}
+        </details>
+        <p class="result-line">Normal order [${nums(ps.inversion.normal)}] → (${nums(ps.b)})</p>
+      </div></div>
+      <div class="step"><span class="num"></span><div>
+        <h3>Pick the one packed tighter to the left</h3>
+        <p>Compare (${nums(ps.a)}) and (${nums(ps.b)}) the Forte way: first → last${sameSpan && n > 2 ? ', then first → 2nd, first → 3rd' : ''}…</p>
+        <p>${decideText}</p>
+        <p class="result-line">Prime form: <b>(${nums(ps.prime)})</b>, Forte <b>${e.name}</b></p>
+      </div></div>`;
+  }
+
+  // ---- sound ----
+  let audio;
+  function tone(midi, start, dur, gain) {
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = 'triangle';
+    o.frequency.value = 440 * 2 ** ((midi - 69) / 12);
+    g.gain.setValueAtTime(0, start);
+    g.gain.linearRampToValueAtTime(gain, start + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    o.connect(g).connect(audio.destination);
+    o.start(start);
+    o.stop(start + dur + 0.05);
+  }
+  $('play').addEventListener('click', () => {
+    if (!current.length) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      audio.resume?.();
+    } catch { return; }
+    // Play in the order typed, each note above the one before, then as a chord.
+    const order = tokens.length ? tokens.map((t) => t.pc) : current;
+    let prev = -Infinity;
+    const midi = order.map((p) => { let m = 60 + p; while (m <= prev) m += 12; prev = m; return m; });
+    while (midi[midi.length - 1] > 84) for (let i = 0; i < midi.length; i++) midi[i] -= 12;
+    const t0 = audio.currentTime + 0.05, step = 0.32;
+    midi.forEach((m, i) => tone(m, t0 + i * step, 0.6, 0.22));
+    const chordAt = t0 + midi.length * step + 0.15;
+    midi.forEach((m) => tone(m, chordAt, 1.8, 0.5 / Math.max(2, midi.length)));
+  });
+
+  readInput();
   applyNotation();
 })();
 </script>

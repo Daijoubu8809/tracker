@@ -137,32 +137,88 @@
   }
 
   const NOTE = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
-  // Numbers: "0 1 4 6", "0,1,4,t", "014e" (t/a = 10, e/b = 11).
-  // Note names: "C E G#", "Db F A", "ceg" (used whenever c, d, f, g or an accidental appears).
-  function parse(text) {
-    const t = text.trim().toLowerCase();
-    if (!t) return [];
-    if (/[cdfg#♯♭]/.test(t)) {
-      const tokens = t.match(/[a-g][#♯♭b]*|[^\s,;]/g);
-      return uniqSorted(tokens.map((tok) => {
-        if (!/^[a-g]/.test(tok)) throw new Error(`Can't read "${tok}" as a note name`);
-        let v = NOTE[tok[0]];
-        for (const ch of tok.slice(1)) v += ch === '#' || ch === '♯' ? 1 : -1;
-        return v;
-      }));
+  const noteValue = (letter, accidentals) => {
+    let v = NOTE[letter.toLowerCase()];
+    for (const ch of accidentals) v += ch === '#' || ch === '♯' ? 1 : -1;
+    return mod12(v);
+  };
+
+  // Reads what the user typed, keeping each item's spelling: [{ label, pc }].
+  // Anything with a digit is numbers ("0 1 4 6", "014t"; t/a = 10, e/b = 11).
+  // Otherwise letters are note names ("abcdefg", "C E G#", "Db F Ab", "DbFAb").
+  // In a run-on string a lowercase b is a flat only right after a capital letter (Ab, Bb).
+  function parseTokens(text) {
+    const raw = text.trim();
+    if (!raw) return [];
+    if (/\d/.test(raw) || /^[\s,;tTeE]+$/.test(raw)) {
+      const t = raw.toLowerCase();
+      const tokens = /[\s,;]/.test(t) ? t.split(/[\s,;]+/).filter(Boolean) : [...t];
+      return tokens.map((tok) => {
+        if (tok === 't' || tok === 'a') return { label: tok.toUpperCase(), pc: 10 };
+        if (tok === 'e' || tok === 'b') return { label: tok.toUpperCase(), pc: 11 };
+        if (/^\d+$/.test(tok) && +tok < 12) return { label: tok, pc: +tok };
+        throw new Error(`Can't read "${tok}". Use 0–11 (t/e for 10/11), or note names like C E G#.`);
+      });
     }
-    const tokens = /[\s,;]/.test(t) ? t.split(/[\s,;]+/).filter(Boolean) : [...t];
-    return uniqSorted(tokens.map((tok) => {
-      if (tok === 't' || tok === 'a') return 10;
-      if (tok === 'e' || tok === 'b') return 11;
-      if (/^\d+$/.test(tok) && +tok < 12) return +tok;
-      throw new Error(`Can't read "${tok}" — use 0–11, or t/e for 10/11`);
-    }));
+    if (/[\s,;]/.test(raw)) {
+      return raw.split(/[\s,;]+/).filter(Boolean).map((tok) => {
+        const m = tok.match(/^([a-gA-G])([#♯b♭]*)$/);
+        if (!m) throw new Error(`Can't read "${tok}" as a note. Try C, F#, Bb or E♭.`);
+        return { label: m[1].toUpperCase() + m[2], pc: noteValue(m[1], m[2]) };
+      });
+    }
+    const out = [];
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (!/[a-gA-G]/.test(ch)) throw new Error(`Can't read "${ch}" as a note. Try letters like abcdefg, C#, or Bb.`);
+      let acc = '';
+      while (i + 1 < raw.length && (/[#♯♭]/.test(raw[i + 1]) || (raw[i + 1] === 'b' && /[A-G]/.test(ch) && !acc.includes('#')))) acc += raw[++i];
+      out.push({ label: ch.toUpperCase() + acc, pc: noteValue(ch, acc) });
+    }
+    return out;
+  }
+  const parse = (text) => uniqSorted(parseTokens(text).map((t) => t.pc));
+
+  // Normal order with the work shown: every rotation, its intervals from the first note,
+  // and which comparison knocked out which rotations.
+  function normalFormSteps(pcs) {
+    const s = uniqSorted(pcs);
+    const rotations = s.map((_, i) => {
+      const order = [...s.slice(i), ...s.slice(0, i)];
+      return { order, dist: order.map((x) => mod12(x - order[0])) };
+    });
+    let alive = rotations.map((_, i) => i);
+    const rounds = [];
+    for (const j of forteOrder(s.length)) {
+      if (alive.length < 2) break;
+      const min = Math.min(...alive.map((i) => rotations[i].dist[j]));
+      const kept = alive.filter((i) => rotations[i].dist[j] === min);
+      rounds.push({ j, min, before: alive, kept });
+      alive = kept;
+    }
+    // Still tied after every comparison means the set is symmetric; Forte takes the one
+    // starting on the lowest pitch class, which is the earliest rotation.
+    return { pcs: s, rotations, rounds, winner: alive[0], tiedAtEnd: alive.length > 1, normal: rotations[alive[0]]?.order ?? [] };
+  }
+
+  function primeFormSteps(pcs) {
+    const s = uniqSorted(pcs);
+    const original = normalFormSteps(s);
+    const inverted = uniqSorted(s.map((x) => -x));
+    const inversion = normalFormSteps(inverted);
+    const a = zeroed(original.normal), b = zeroed(inversion.normal);
+    let decided = null;
+    for (const j of forteOrder(a.length)) {
+      if (a[j] !== b[j]) { decided = { j, a: a[j], b: b[j] }; break; }
+    }
+    const prime = !decided || decided.a < decided.b ? a : b;
+    return { original, inverted, inversion, a, b, decided, prime, winner: !decided ? 'same' : decided.a < decided.b ? 'original' : 'inversion' };
   }
 
   root.Forte = {
     TABLE, list, byPrime, byName, mod12, normalForm, primeForm, intervalVector,
-    transpose, invert, multiply, complement, identify, relate, parse, key,
+    transpose, invert, multiply, complement, identify, relate, parse, parseTokens, key,
+    normalFormSteps, primeFormSteps, forteOrder,
   };
   if (typeof module !== 'undefined') module.exports = root.Forte;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
