@@ -1,0 +1,427 @@
+<meta charset="utf-8">
+<title>Forte Set Finder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: phone-first single column; on wide screens the pc clock sits beside the analysis. */
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --line: #dde1ea;
+  --fg: #171b26;
+  --muted: #5b6375;
+  --accent: #2b52c9;
+  --accent-soft: #e4eaff;
+  --accent-fg: #ffffff;
+  --warn: #9a5b00;
+  --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191d27; --line: #2c3240; --fg: #e7e9ef; --muted: #9aa2b5;
+    --accent: #87a3ff; --accent-soft: #232c4a; --accent-fg: #0d1020; --warn: #e3a74f; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191d27; --line: #2c3240; --fg: #e7e9ef; --muted: #9aa2b5;
+  --accent: #87a3ff; --accent-soft: #232c4a; --accent-fg: #0d1020; --warn: #e3a74f; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font: 15px/1.5 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+h1 { font: 700 clamp(26px, 6vw, 34px)/1.1 var(--display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h1 small { display: block; font: 500 13px/1.4 var(--body); color: var(--muted); letter-spacing: 0; margin-top: 4px; }
+h2 { font: 700 18px/1.2 var(--display); margin: 0; }
+.label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; padding: 5px 10px; font-size: 13px; font-family: var(--mono); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+
+.main { display: grid; gap: 20px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .main { grid-template-columns: minmax(280px, 340px) 1fr; align-items: start; } }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
+
+.entry { display: grid; gap: 6px; }
+.entry input {
+  width: 100%; font: 500 18px var(--mono); padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+}
+.entry input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.hint { font-size: 12.5px; color: var(--muted); }
+.err { font-size: 13px; color: var(--warn); min-height: 1.2em; }
+
+.clock { width: 100%; max-width: 300px; aspect-ratio: 1; justify-self: center; display: block; touch-action: manipulation; }
+.clock .ring { fill: none; stroke: var(--line); stroke-width: 1.5; }
+.clock .poly { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.clock .node circle { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; transition: fill .12s; }
+.clock .node text { fill: var(--fg); font: 500 15px var(--mono); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.clock .node.on circle { fill: var(--accent); stroke: var(--accent); }
+.clock .node.on text { fill: var(--accent-fg); }
+.clock .node { cursor: pointer; }
+.clock .node:focus-visible circle { stroke: var(--fg); stroke-width: 2.5; }
+.clock .node:focus { outline: none; }
+
+.ops { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 5px 12px;
+  font-size: 13px; font-family: var(--mono);
+}
+.chip:hover { border-color: var(--accent); }
+.chip.ghost { font-family: var(--body); color: var(--muted); }
+
+.result-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 18px; }
+.forte-name { font: 700 clamp(44px, 12vw, 64px)/0.95 var(--display); letter-spacing: -0.02em; color: var(--accent); }
+.prime-big { font: 500 clamp(22px, 5.5vw, 28px)/1.1 var(--mono); }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+
+.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px 18px; margin: 0; }
+.facts div { min-width: 0; }
+.facts dt { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.facts dd { margin: 2px 0 0; font-family: var(--mono); font-size: 15.5px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.facts dd button { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.facts dd .sub { font-family: var(--body); font-size: 12.5px; color: var(--muted); }
+
+.icv { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; max-width: 280px; }
+.icv span { display: grid; text-align: center; border: 1px solid var(--line); border-radius: 6px; padding: 3px 0; font-family: var(--mono); }
+.icv span b { font-weight: 500; font-size: 17px; }
+.icv span i { font-style: normal; font-size: 10px; color: var(--muted); }
+
+.compare-out { font-size: 14.5px; display: grid; gap: 6px; }
+.compare-out p { margin: 0; }
+
+.cat-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.cat-tools input { flex: 1 1 180px; font: 14px var(--body); padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.cards { display: flex; flex-wrap: wrap; gap: 4px; }
+.cards button { border: 1px solid var(--line); background: var(--bg); border-radius: 7px; padding: 4px 9px; font: 13px var(--mono); }
+.cards button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.table-wrap { overflow-x: auto; max-height: 520px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--surface); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; z-index: 1; }
+td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+tbody tr { cursor: pointer; }
+tbody tr:hover, tbody tr.current { background: var(--accent-soft); }
+td.nm { font-weight: 500; color: var(--accent); }
+.diff { color: var(--warn); font-size: 11px; font-family: var(--body); margin-left: 4px; }
+
+details.method { font-size: 14px; color: var(--muted); }
+details.method summary { cursor: pointer; color: var(--fg); font-weight: 500; }
+details.method p { max-width: 68ch; margin: 8px 0 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Forte Set Finder<small>Post-tonal set classes by Forte's method</small></h1>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="label">10 / 11 as</span>
+      <div class="seg" role="group" aria-label="How to write 10 and 11" id="notation">
+        <button type="button" data-n="te" aria-pressed="true">T E</button>
+        <button type="button" data-n="ab" aria-pressed="false">A B</button>
+        <button type="button" data-n="num" aria-pressed="false">10 11</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="main">
+    <section class="panel" aria-label="Enter a set">
+      <div class="entry">
+        <label class="label" for="pcs">Pitch classes or note names</label>
+        <input id="pcs" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" value="7 E 2 5">
+        <div class="hint">Try <span class="mono">0 1 4 6</span>, <span class="mono">014t</span>, or <span class="mono">Db F A</span>. Or tap the clock.</div>
+        <div class="err" id="err" role="status"></div>
+      </div>
+      <svg class="clock" id="clock" viewBox="0 0 300 300" role="group" aria-label="Pitch-class clock"></svg>
+      <div>
+        <div class="label" style="margin-bottom:6px">Transform this set</div>
+        <div class="ops" id="ops">
+          <button class="chip" data-op="t-1" type="button">T−1</button>
+          <button class="chip" data-op="t1" type="button">T+1</button>
+          <button class="chip" data-op="i0" type="button">I (T0I)</button>
+          <button class="chip" data-op="m5" type="button">M5</button>
+          <button class="chip" data-op="comp" type="button">Complement</button>
+          <button class="chip" data-op="prime" type="button">To prime</button>
+          <button class="chip ghost" data-op="clear" type="button">Clear</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Analysis" id="analysis" aria-live="polite"></section>
+  </div>
+
+  <section class="panel" aria-label="Compare two sets">
+    <h2>Compare with another set</h2>
+    <div class="entry">
+      <label class="label" for="pcs2">Second set</label>
+      <input id="pcs2" autocomplete="off" autocapitalize="off" spellcheck="false" value="0 1 4 7">
+    </div>
+    <div class="compare-out" id="compare"></div>
+  </section>
+
+  <section class="panel" aria-label="Forte catalog">
+    <div class="cat-tools">
+      <h2>Forte's list of set classes</h2>
+      <input id="search" type="search" placeholder="Search name, prime or vector (e.g. 4-Z15, 0146, 111111)">
+    </div>
+    <div class="cards" id="cards" role="group" aria-label="Cardinality"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Prime form</th><th>IC vector</th><th>Z</th><th>Complement</th><th>M</th><th>Invariance</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <details class="method">
+      <summary>How Forte's method picks the prime form</summary>
+      <p><b>Normal order:</b> arrange the pitch classes in ascending order and try every rotation. Keep the one with the smallest interval from first to last. If two rotations tie, compare the interval from first to second, then first to third, and so on. The smallest wins. This packs the set toward the left.</p>
+      <p><b>Prime form:</b> find the normal order of the set and of its inversion, transpose each to start on 0, and keep the one that is better packed by the same rule.</p>
+      <p>Rahn's method (used by many newer textbooks) breaks ties by working from the right, comparing first to second-to-last. The two methods give different prime forms for six set classes, marked <span class="diff">≠ Rahn</span> in the table: 5-20, 6-Z29, 6-31, 7-Z18, 7-20 and 8-26. This app always uses Forte's answer.</p>
+    </details>
+  </section>
+</div>
+
+<script src="forte.js"></script>
+<script>
+(() => {
+  const F = window.Forte;
+  const $ = (id) => document.getElementById(id);
+  const RAHN_DIFF = new Set(['5-20', '6-Z29', '6-31', '7-Z18', '7-20', '8-26']);
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  };
+
+  let notation = store.get('notation') || 'te';
+  let current = [];
+  let card = 4;
+
+  const pc = (x) => x < 10 || x > 11 ? String(x) : notation === 'te' ? 'TE'[x - 10] : notation === 'ab' ? 'AB'[x - 10] : String(x);
+  // Compact "[0146]" when every pc is one character, otherwise comma separated.
+  const fmt = (pcs, br = '[]') => {
+    const parts = pcs.map(pc);
+    const sep = parts.some((p) => p.length > 1) ? ',' : '';
+    return br[0] + parts.join(sep) + br[1];
+  };
+  const vec = (v) => '<' + v.join('') + '>';
+  const NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function setInput(pcs) {
+    $('pcs').value = pcs.map(pc).join(' ');
+    $('err').textContent = '';
+    current = pcs;
+    render();
+  }
+
+  // ---- clock ----
+  const clock = $('clock');
+  const R = 112, C = 150;
+  const pos = (i, r = R) => [C + r * Math.sin((i * Math.PI) / 6), C - r * Math.cos((i * Math.PI) / 6)];
+  clock.innerHTML = `<circle class="ring" cx="${C}" cy="${C}" r="${R}"></circle><polygon class="poly" id="poly" points=""></polygon>` +
+    [...Array(12).keys()].map((i) => {
+      const [x, y] = pos(i);
+      return `<g class="node" data-pc="${i}" tabindex="0" role="button" aria-label="Pitch class ${i} (${NAMES[i]})"><circle cx="${x}" cy="${y}" r="19"></circle><text x="${x}" y="${y}" id="nodelabel${i}">${i}</text></g>`;
+    }).join('');
+  const toggle = (i) => setInput(current.includes(i) ? current.filter((x) => x !== i) : [...current, i].sort((a, b) => a - b));
+  clock.addEventListener('click', (e) => { const g = e.target.closest('.node'); if (g) toggle(+g.dataset.pc); });
+  clock.addEventListener('keydown', (e) => {
+    const g = e.target.closest('.node');
+    if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggle(+g.dataset.pc); }
+  });
+
+  function drawClock() {
+    clock.querySelectorAll('.node').forEach((g) => {
+      const i = +g.dataset.pc;
+      g.classList.toggle('on', current.includes(i));
+      g.setAttribute('aria-pressed', current.includes(i));
+      $('nodelabel' + i).textContent = pc(i);
+    });
+    $('poly').setAttribute('points', current.length > 1 ? current.map((i) => pos(i).join(',')).join(' ') : '');
+  }
+
+  // ---- analysis ----
+  const link = (e) => e ? `<button type="button" data-load="${e.key}">${e.name}</button>` : '—';
+
+  function render() {
+    drawClock();
+    const out = $('analysis');
+    if (!current.length) {
+      out.innerHTML = `<div class="label">Analysis</div><p style="margin:0;color:var(--muted)">Enter pitch classes or tap the clock to see the set's Forte name, prime form and interval vector.</p>`;
+      renderCompare();
+      highlightRow(null);
+      return;
+    }
+    const id = F.identify(current);
+    const e = id.entry;
+    const inv = e.invariance;
+    out.innerHTML = `
+      <div class="label">Analysis</div>
+      <div class="result-head">
+        <div class="forte-name">${e.name}</div>
+        <div style="display:grid;gap:4px">
+          <div class="prime-big">${fmt(e.prime, '()')}</div>
+          <div>${e.zPartner ? `<span class="tag">Z-related to ${e.zPartner.name}</span> ` : ''}${RAHN_DIFF.has(e.name) ? `<span class="tag" title="Rahn's method gives a different prime form">Forte ≠ Rahn</span>` : ''}</div>
+        </div>
+      </div>
+      <dl class="facts">
+        <div><dt>Normal order</dt><dd>${fmt(id.normal)}</dd></div>
+        <div><dt>Prime form</dt><dd>${fmt(e.prime, '()')}</dd></div>
+        <div><dt>Your set is</dt><dd>${id.ops.join(', ') || '—'} <span class="sub">of the prime</span></dd></div>
+        <div><dt>Notes</dt><dd style="font-family:var(--body)">${id.pcs.map((x) => NAMES[x]).join(' ')}</dd></div>
+        <div style="grid-column:1/-1"><dt>Interval-class vector</dt><dd><div class="icv">${e.vector.map((n, i) => `<span><b>${n}</b><i>ic${i + 1}</i></span>`).join('')}</div></dd></div>
+        <div><dt>Complement</dt><dd>${link(e.complement)}</dd></div>
+        <div><dt>Z-partner</dt><dd>${link(e.zPartner)}</dd></div>
+        <div><dt>M-partner (M5)</dt><dd>${link(e.mPartner)}</dd></div>
+        <div><dt>Symmetry</dt><dd>${inv[0]}×Tn, ${inv[1]}×TnI <span class="sub">${inv[1] ? 'inversionally symmetric' : 'not inversionally symmetric'}</span></dd></div>
+        <div><dt>Distinct forms</dt><dd>${24 / (inv[0] + inv[1])} <span class="sub">of 24 Tn/TnI</span></dd></div>
+        <div><dt>Invariance vector</dt><dd>${'(' + inv.join('') + ')'}</dd></div>
+        <div><dt>Interval succession</dt><dd>${fmt(e.cycle, '{}')}</dd></div>
+      </dl>`;
+    renderCompare();
+    highlightRow(e.key);
+  }
+
+  $('analysis').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-load]');
+    if (b) setInput(F.byPrime[b.dataset.load].prime.slice());
+  });
+
+  // ---- input ----
+  $('pcs').addEventListener('input', () => {
+    try {
+      current = F.parse($('pcs').value);
+      $('err').textContent = '';
+      render();
+    } catch (err) {
+      $('err').textContent = err.message;
+    }
+  });
+
+  $('ops').addEventListener('click', (ev) => {
+    const op = ev.target.closest('[data-op]')?.dataset.op;
+    if (!op) return;
+    const sort = (a) => [...new Set(a)].sort((x, y) => x - y);
+    const next = {
+      't-1': () => F.transpose(current, -1),
+      t1: () => F.transpose(current, 1),
+      i0: () => F.invert(current, 0),
+      m5: () => F.multiply(current, 5),
+      comp: () => F.complement(current),
+      prime: () => F.primeForm(current),
+      clear: () => [],
+    }[op]();
+    setInput(sort(next));
+  });
+
+  // ---- compare ----
+  // Can some Tn or TnI form of the smaller set be found inside the bigger one?
+  function abstractInclusion(small, big) {
+    for (let n = 0; n < 12; n++) {
+      if (F.transpose(small, n).every((x) => big.includes(x))) return `T${n}`;
+      if (F.invert(small, n).every((x) => big.includes(x))) return `T${n}I`;
+    }
+    return null;
+  }
+
+  function renderCompare() {
+    const out = $('compare');
+    let b;
+    try { b = F.parse($('pcs2').value); } catch (err) { out.innerHTML = `<p class="err">${esc(err.message)}</p>`; return; }
+    const a = current;
+    if (!a.length || !b.length) { out.innerHTML = `<p style="color:var(--muted)">Enter both sets to compare them.</p>`; return; }
+    const ea = F.identify(a).entry, eb = F.identify(b).entry;
+    const lines = [`<p><span class="mono">${fmt(a)}</span> is <b>${ea.name}</b>; <span class="mono">${fmt(b)}</span> is <b>${eb.name}</b>.</p>`];
+    const ops = F.relate(a, b);
+    if (ops.length) lines.push(`<p>Same set class. The first set becomes the second by <b class="mono">${ops.join(', ')}</b>.</p>`);
+    else if (ea.zPartner === eb) lines.push(`<p>Z-related: different set classes with the same interval vector <span class="mono">${vec(ea.vector)}</span>.</p>`);
+    else if (ea.complement === eb && ea.card + eb.card === 12) lines.push(`<p>Complementary set classes.</p>`);
+    else lines.push(`<p>Different set classes.</p>`);
+    if (ea.card !== eb.card) {
+      const [s, l, sn, ln] = ea.card < eb.card ? [a, b, 'first', 'second'] : [b, a, 'second', 'first'];
+      const lit = s.every((x) => l.includes(x));
+      const abs = abstractInclusion(s, l);
+      if (lit) lines.push(`<p>The ${sn} set is a literal subset of the ${ln}.</p>`);
+      else if (abs) lines.push(`<p>The ${sn} set's class is a subset class of the ${ln} (${abs} of the ${sn} set is inside it).</p>`);
+      else lines.push(`<p>No form of the ${sn} set fits inside the ${ln}.</p>`);
+    }
+    const common = a.filter((x) => b.includes(x));
+    lines.push(`<p>Common tones: <span class="mono">${common.length ? fmt(common, '{}') : 'none'}</span></p>`);
+    out.innerHTML = lines.join('');
+  }
+  $('pcs2').addEventListener('input', renderCompare);
+
+  // ---- catalog ----
+  const CARDS = [...Array(13).keys()];
+  $('cards').innerHTML = `<button type="button" data-c="all" aria-pressed="false">All</button>` +
+    CARDS.map((c) => `<button type="button" data-c="${c}" aria-pressed="${c === card}">${c}</button>`).join('');
+  $('cards').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-c]');
+    if (!b) return;
+    card = b.dataset.c === 'all' ? 'all' : +b.dataset.c;
+    $('cards').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    renderTable();
+  });
+  $('search').addEventListener('input', renderTable);
+
+  function renderTable() {
+    const q = $('search').value.trim().toLowerCase().replace(/[\s,()[\]<>{}]/g, '');
+    const rows = F.list.filter((e) => {
+      if (q) {
+        const hay = [e.name.toLowerCase(), e.name.toLowerCase().replace('z', ''), e.key, e.prime.map(pc).join('').toLowerCase(), e.vector.join('')];
+        return hay.some((h) => h.includes(q));
+      }
+      return card === 'all' || e.card === card;
+    });
+    $('rows').innerHTML = rows.map((e) => `
+      <tr data-key="${e.key}">
+        <td class="nm">${e.name}${RAHN_DIFF.has(e.name) ? '<span class="diff">≠ Rahn</span>' : ''}</td>
+        <td>${e.card ? fmt(e.prime) : '[ ]'}</td>
+        <td>${vec(e.vector)}</td>
+        <td>${e.zPartner ? e.zPartner.name : ''}</td>
+        <td>${e.complement.name}</td>
+        <td>${e.mPartner.name}</td>
+        <td>(${e.invariance.join('')})</td>
+      </tr>`).join('') || `<tr><td colspan="7" style="font-family:var(--body);color:var(--muted)">No set class matches “${esc($('search').value)}”.</td></tr>`;
+    highlightRow(current.length ? F.key(F.primeForm(current)) : null);
+  }
+  function highlightRow(key) {
+    $('rows').querySelectorAll('tr').forEach((tr) => tr.classList.toggle('current', tr.dataset.key === key));
+  }
+  $('rows').addEventListener('click', (ev) => {
+    const tr = ev.target.closest('tr[data-key]');
+    if (tr) { setInput(F.byPrime[tr.dataset.key].prime.slice()); $('pcs').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  });
+
+  // ---- notation ----
+  function applyNotation() {
+    $('notation').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.n === notation));
+    $('pcs').value = current.map(pc).join(' ');
+    render();
+    renderTable();
+  }
+  $('notation').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-n]');
+    if (!b) return;
+    notation = b.dataset.n;
+    store.set('notation', notation);
+    applyNotation();
+  });
+
+  current = F.parse($('pcs').value);
+  applyNotation();
+})();
+</script>
