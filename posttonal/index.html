@@ -5,7 +5,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: phone-first single column; on wide screens the pc clock sits beside the analysis. */
+/* Layout: sticky tab bar; set tabs put the pc clock beside the results, matrix and list use the full width. */
 :root {
   --bg: #f5f6f8;
   --surface: #ffffff;
@@ -31,19 +31,23 @@
   --accent: #87a3ff; --accent-soft: #232c4a; --accent-fg: #0d1020; --warn: #e3a74f; color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   background: var(--bg); color: var(--fg); font: 15px/1.5 var(--body);
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-block: 20px 48px;
 }
-.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 20px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 16px; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
 h1 { font: 700 clamp(26px, 6vw, 34px)/1.1 var(--display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
 h1 small { display: block; font: 500 13px/1.4 var(--body); color: var(--muted); letter-spacing: 0; margin-top: 4px; }
 h2 { font: 700 18px/1.2 var(--display); margin: 0; }
+h3 { font: 700 15px/1.3 var(--display); margin: 0; }
 .label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); margin: 0; }
 button { font: inherit; color: inherit; cursor: pointer; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -51,50 +55,32 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .seg button { border: 0; background: none; padding: 5px 10px; font-size: 13px; font-family: var(--mono); }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
 
-.main { display: grid; gap: 20px; grid-template-columns: 1fr; }
-@media (min-width: 760px) { .main { grid-template-columns: minmax(280px, 340px) 1fr; align-items: start; } }
+.tabs {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  display: flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  overflow-x: auto;
+}
+.tabs button { flex: 1 1 0; min-width: 0; border: 0; background: none; border-radius: 9px; padding: 8px 4px; font-weight: 600; font-size: 14px; color: var(--muted); white-space: nowrap; }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); }
 
-.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
+.main { display: grid; gap: 16px; grid-template-columns: 1fr; }
+@media (min-width: 780px) { .main:not(.solo) { grid-template-columns: minmax(260px, 310px) 1fr; align-items: start; } }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 14px; min-width: 0; align-content: start; }
 
 .entry { display: grid; gap: 6px; }
-.entry input {
+.entry input, .field {
   width: 100%; font: 500 18px var(--mono); padding: 10px 12px; border-radius: 10px;
   border: 1px solid var(--line); background: var(--bg); color: var(--fg);
 }
-.entry input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
-.hint { font-size: 12.5px; color: var(--muted); }
-.entry-row { display: flex; gap: 8px; }
-.entry-row input { flex: 1; min-width: 0; }
-.play { flex: none; border: 0; border-radius: 10px; padding: 0 14px; background: var(--accent); color: var(--accent-fg); font-weight: 600; font-size: 14px; }
+.entry input:focus, .field:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.entry-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.entry-row input { flex: 1 1 160px; min-width: 0; }
+.play { flex: none; border: 0; border-radius: 10px; padding: 0 14px; min-height: 44px; background: var(--accent); color: var(--accent-fg); font-weight: 600; font-size: 14px; }
 .play:disabled { opacity: .45; cursor: default; }
-.clock .nname { fill: var(--muted); font: 500 11px var(--body); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.err { font-size: 13px; color: var(--warn); min-height: 1.2em; margin: 0; }
 
-.steps { display: grid; gap: 18px; counter-reset: step; }
-.step { display: grid; grid-template-columns: 30px 1fr; gap: 4px 12px; align-items: start; }
-.step > .num { counter-increment: step; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; font: 700 13px var(--display); }
-.step > .num::before { content: counter(step); }
-.step > div { min-width: 0; display: grid; gap: 8px; }
-.step h3 { margin: 2px 0 0; font: 700 16px/1.3 var(--display); }
-.step p { margin: 0; max-width: 68ch; }
-.notechips { display: flex; flex-wrap: wrap; gap: 6px; }
-.notechips span { border: 1px solid var(--line); border-radius: 8px; padding: 3px 9px; font-family: var(--mono); background: var(--bg); }
-.notechips span b { font-family: var(--body); font-weight: 600; }
-.notechips span.dup { opacity: .45; text-decoration: line-through; }
-.rot { border-collapse: collapse; font-size: 13.5px; width: auto; }
-.rot th, .rot td { padding: 5px 7px; border-bottom: 1px solid var(--line); text-align: center; }
-.rot th { position: static; font-size: 10.5px; }
-.rot td:first-child, .rot th:first-child { text-align: left; }
-.rot td small { display: block; font: 11px var(--body); color: var(--muted); }
-.rot tr.out td { opacity: .42; }
-.rot tr.win td { background: var(--accent-soft); font-weight: 600; }
-.rot td.key { outline: 2px solid var(--accent); outline-offset: -3px; border-radius: 5px; }
-.result-line { font-family: var(--mono); font-size: 17px; }
-.result-line b { color: var(--accent); }
-details.inv summary { cursor: pointer; color: var(--accent); font-size: 14px; }
-details.inv[open] summary { margin-bottom: 8px; }
-.err { font-size: 13px; color: var(--warn); min-height: 1.2em; }
-
-.clock { width: 100%; max-width: 300px; aspect-ratio: 1; justify-self: center; display: block; touch-action: manipulation; }
+.clock { width: 100%; max-width: 260px; aspect-ratio: 1; justify-self: center; display: block; touch-action: manipulation; }
 .clock .ring { fill: none; stroke: var(--line); stroke-width: 1.5; }
 .clock .poly { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
 .clock .node circle { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; transition: fill .12s; }
@@ -104,6 +90,7 @@ details.inv[open] summary { margin-bottom: 8px; }
 .clock .node { cursor: pointer; }
 .clock .node:focus-visible circle { stroke: var(--fg); stroke-width: 2.5; }
 .clock .node:focus { outline: none; }
+.clock .nname { fill: var(--muted); font: 500 11px var(--body); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 
 .ops { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
@@ -122,41 +109,83 @@ details.inv[open] summary { margin-bottom: 8px; }
 .facts div { min-width: 0; }
 .facts dt { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .facts dd { margin: 2px 0 0; font-family: var(--mono); font-size: 15.5px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.facts dd button { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 3px; }
 .facts dd .sub { font-family: var(--body); font-size: 12.5px; color: var(--muted); }
+.facts .wide { grid-column: 1 / -1; }
+.linkish { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 3px; }
 
 .icv { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; max-width: 280px; }
 .icv span { display: grid; text-align: center; border: 1px solid var(--line); border-radius: 6px; padding: 3px 0; font-family: var(--mono); }
 .icv span b { font-weight: 500; font-size: 17px; }
 .icv span i { font-style: normal; font-size: 10px; color: var(--muted); }
 
+.related { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.rel { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; background: var(--bg); min-width: 0; }
+.rel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.rel-name { font: 700 26px/1 var(--display); color: var(--accent); }
+.rel .facts { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px 14px; }
+.rel .facts dd { font-size: 14.5px; }
+
+.group { display: grid; gap: 8px; }
+.group + .group { border-top: 1px solid var(--line); padding-top: 12px; }
+.group-title { display: flex; gap: 8px; align-items: baseline; }
+.sclist { display: flex; flex-wrap: wrap; gap: 6px; }
+.sc { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 4px 9px; font: 13px var(--mono); display: inline-flex; gap: 6px; align-items: baseline; }
+.sc b { font-family: var(--body); font-weight: 600; color: var(--accent); }
+.sc i { font-style: normal; color: var(--muted); font-size: 12px; }
+.sc:hover { border-color: var(--accent); }
+details.group summary { cursor: pointer; list-style-position: inside; }
+details.group[open] summary { margin-bottom: 8px; }
+
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; font-size: 14px; }
+
+.forms { width: 100%; }
+.forms th, .forms td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.forms th { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.forms td.op { font: 500 13px var(--mono); color: var(--muted); width: 1%; }
+.forms td.f { cursor: pointer; font-family: var(--mono); }
+.forms td.f:hover { background: var(--accent-soft); }
+.forms td.f small { display: block; font: 11.5px var(--body); color: var(--muted); }
+.forms td.same { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+
 .compare-out { font-size: 14.5px; display: grid; gap: 6px; }
 .compare-out p { margin: 0; }
+
+.mx-tools { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.mx { border-collapse: separate; border-spacing: 2px; margin: 0 auto; table-layout: fixed; width: 100%; max-width: 540px; }
+.mx th, .mx td { padding: 0; text-align: center; }
+.mx td button, .mx th button { width: 100%; min-width: 20px; height: 30px; border: 0; border-radius: 6px; font: 13px var(--mono); font-variant-numeric: tabular-nums; padding: 0; }
+.mx td button { background: var(--bg); }
+.mx td button:hover { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.mx td.sel button { background: var(--accent); color: var(--accent-fg); }
+.mx td.first button { font-weight: 600; }
+.mx th button { background: none; font: 600 10px var(--body); color: var(--muted); letter-spacing: -0.02em; }
+@media (max-width: 420px) { .mx td button { font-size: 12px; height: 27px; } .mx th button { font-size: 9px; } }
+.mx th button:hover { color: var(--accent); }
+.mx-sel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); min-height: 52px; }
+.mx-sel .mono { font-size: 15px; }
+.mx-sel b { color: var(--accent); font-family: var(--display); font-size: 18px; }
 
 .cat-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
 .cat-tools input { flex: 1 1 180px; font: 14px var(--body); padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
 .cards { display: flex; flex-wrap: wrap; gap: 4px; }
 .cards button { border: 1px solid var(--line); background: var(--bg); border-radius: 7px; padding: 4px 9px; font: 13px var(--mono); }
 .cards button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
-.table-wrap { overflow-x: auto; max-height: 520px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
-table { border-collapse: collapse; width: 100%; font-size: 14px; }
-th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-th { position: sticky; top: 0; background: var(--surface); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; z-index: 1; }
-td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-tbody tr { cursor: pointer; }
-tbody tr:hover, tbody tr.current { background: var(--accent-soft); }
-td.nm { font-weight: 500; color: var(--accent); }
+.cat-wrap { overflow: auto; max-height: 560px; border: 1px solid var(--line); border-radius: 10px; }
+.cat { width: 100%; }
+.cat th, .cat td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.cat th { position: sticky; top: 0; background: var(--surface); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; z-index: 1; }
+.cat td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.cat tbody tr { cursor: pointer; }
+.cat tbody tr:hover, .cat tbody tr.current { background: var(--accent-soft); }
+.cat td.nm { font-weight: 500; color: var(--accent); }
 .diff { color: var(--warn); font-size: 11px; font-family: var(--body); margin-left: 4px; }
-
-details.method { font-size: 14px; color: var(--muted); }
-details.method summary { cursor: pointer; color: var(--fg); font-weight: 500; }
-details.method p { max-width: 68ch; margin: 8px 0 0; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
 <div class="wrap">
   <header>
-    <h1>Forte Set Finder<small>Post-tonal set classes by Forte's method</small></h1>
+    <h1>Forte Set Finder<small>Post-tonal toolkit · Forte prime forms</small></h1>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <span class="label">10 / 11 as</span>
       <div class="seg" role="group" aria-label="How to write 10 and 11" id="notation">
@@ -167,68 +196,84 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
     </div>
   </header>
 
-  <div class="main">
-    <section class="panel" aria-label="Enter a set">
+  <nav class="tabs" role="tablist" aria-label="Tools" id="tabs">
+    <button type="button" role="tab" data-tab="set" aria-selected="true">Set</button>
+    <button type="button" role="tab" data-tab="sub" aria-selected="false">Subsets</button>
+    <button type="button" role="tab" data-tab="forms" aria-selected="false">Tn/TnI</button>
+    <button type="button" role="tab" data-tab="matrix" aria-selected="false">Matrix</button>
+    <button type="button" role="tab" data-tab="list" aria-selected="false">List</button>
+  </nav>
+
+  <div class="main" id="main">
+    <section class="panel" id="inputPanel" aria-label="Enter a set">
       <div class="entry">
-        <label class="label" for="pcs">Pitch classes or note names</label>
+        <label class="label" for="pcs">Notes or pitch classes</label>
         <div class="entry-row">
-          <input id="pcs" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" value="G B D F">
+          <input id="pcs" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="G B D F  or  0 1 4 6" value="G B D F">
           <button type="button" class="play" id="play" aria-label="Play these notes">▶ Play</button>
         </div>
-        <div class="hint">Type notes like <span class="mono">G B D F</span>, <span class="mono">abcdefg</span>, <span class="mono">C# E G#</span> or <span class="mono">Db F Ab</span>. Numbers work too: <span class="mono">0 1 4 6</span>. Or tap the clock.</div>
-        <div class="err" id="err" role="status"></div>
+        <p class="err" id="err" role="status"></p>
       </div>
       <svg class="clock" id="clock" viewBox="0 0 300 300" role="group" aria-label="Pitch-class clock"></svg>
-      <div>
-        <div class="label" style="margin-bottom:6px">Transform this set</div>
-        <div class="ops" id="ops">
-          <button class="chip" data-op="t-1" type="button">T−1</button>
-          <button class="chip" data-op="t1" type="button">T+1</button>
-          <button class="chip" data-op="i0" type="button">I (T0I)</button>
-          <button class="chip" data-op="m5" type="button">M5</button>
-          <button class="chip" data-op="comp" type="button">Complement</button>
-          <button class="chip" data-op="prime" type="button">To prime</button>
-          <button class="chip ghost" data-op="clear" type="button">Clear</button>
-        </div>
+      <div class="ops" id="ops">
+        <button class="chip" data-op="t-1" type="button">T−1</button>
+        <button class="chip" data-op="t1" type="button">T+1</button>
+        <button class="chip" data-op="i0" type="button">T0I</button>
+        <button class="chip" data-op="m5" type="button">M5</button>
+        <button class="chip" data-op="comp" type="button">Complement</button>
+        <button class="chip" data-op="prime" type="button">Prime</button>
+        <button class="chip ghost" data-op="clear" type="button">Clear</button>
       </div>
     </section>
 
-    <section class="panel" aria-label="Analysis" id="analysis" aria-live="polite"></section>
+    <section class="panel" role="tabpanel" data-panel="set" id="setPanel" aria-live="polite"></section>
+    <section class="panel" role="tabpanel" data-panel="sub" id="subPanel" hidden></section>
+    <section class="panel" role="tabpanel" data-panel="forms" hidden>
+      <div id="formsOut"></div>
+      <div class="entry">
+        <label class="label" for="pcs2">Compare with</label>
+        <input id="pcs2" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" value="C Eb G Bb">
+      </div>
+      <div class="compare-out" id="compare"></div>
+    </section>
+
+    <section class="panel" role="tabpanel" data-panel="matrix" hidden>
+      <div class="entry">
+        <label class="label" for="row">Row</label>
+        <div class="entry-row">
+          <input id="row" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" value="G Bb D F# A C E G# B C# Eb F">
+          <button type="button" class="chip" id="useSet">Use PC Set</button>
+        </div>
+        <p class="err" id="rowErr" role="status"></p>
+      </div>
+      <div class="mx-tools">
+        <div class="seg" role="group" aria-label="Matrix labels" id="mxLabels">
+          <button type="button" data-v="fixed" aria-pressed="true">P = first pc</button>
+          <button type="button" data-v="movable" aria-pressed="false">P0 = row</button>
+        </div>
+        <div class="seg" role="group" aria-label="Show matrix as" id="mxShow">
+          <button type="button" data-v="num" aria-pressed="true">0–11</button>
+          <button type="button" data-v="notes" aria-pressed="false">Notes</button>
+        </div>
+      </div>
+      <div class="scroll" style="border:0"><table class="mx" id="mx"></table></div>
+      <div class="mx-sel" id="mxSel"></div>
+    </section>
+
+    <section class="panel" role="tabpanel" data-panel="list" hidden>
+      <div class="cat-tools">
+        <h2>Forte's set classes</h2>
+        <input id="search" type="search" placeholder="Search 4-Z15, 0146, 111111">
+      </div>
+      <div class="cards" id="cards" role="group" aria-label="Cardinality"></div>
+      <div class="cat-wrap">
+        <table class="cat">
+          <thead><tr><th>Name</th><th>Prime form</th><th>IC vector</th><th>Z</th><th>Complement</th><th>M</th><th>Invariance</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
   </div>
-
-  <section class="panel" aria-label="Step by step">
-    <h2>Step by step: how to get the prime form</h2>
-    <div class="steps" id="steps"></div>
-  </section>
-
-  <section class="panel" aria-label="Compare two sets">
-    <h2>Compare with another set</h2>
-    <div class="entry">
-      <label class="label" for="pcs2">Second set</label>
-      <input id="pcs2" autocomplete="off" autocapitalize="off" spellcheck="false" value="0 1 4 7">
-    </div>
-    <div class="compare-out" id="compare"></div>
-  </section>
-
-  <section class="panel" aria-label="Forte catalog">
-    <div class="cat-tools">
-      <h2>Forte's list of set classes</h2>
-      <input id="search" type="search" placeholder="Search name, prime or vector (e.g. 4-Z15, 0146, 111111)">
-    </div>
-    <div class="cards" id="cards" role="group" aria-label="Cardinality"></div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Name</th><th>Prime form</th><th>IC vector</th><th>Z</th><th>Complement</th><th>M</th><th>Invariance</th></tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-    <details class="method">
-      <summary>How Forte's method picks the prime form</summary>
-      <p><b>Normal order:</b> arrange the pitch classes in ascending order and try every rotation. Keep the one with the smallest interval from first to last. If two rotations tie, compare the interval from first to second, then first to third, and so on. The smallest wins. This packs the set toward the left.</p>
-      <p><b>Prime form:</b> find the normal order of the set and of its inversion, transpose each to start on 0, and keep the one that is better packed by the same rule.</p>
-      <p>Rahn's method (used by many newer textbooks) breaks ties by working from the right, comparing first to second-to-last. The two methods give different prime forms for six set classes, marked <span class="diff">≠ Rahn</span> in the table: 5-20, 6-Z29, 6-31, 7-Z18, 7-20 and 8-26. This app always uses Forte's answer.</p>
-    </details>
-  </section>
 </div>
 
 <script src="forte.js"></script>
@@ -241,35 +286,85 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   };
+  const TABS = ['set', 'sub', 'forms', 'matrix', 'list'];
 
   let notation = store.get('notation') || 'te';
+  let tab = TABS.includes(store.get('tab')) ? store.get('tab') : 'set';
   let current = [];
+  let tokens = [];
+  let inputStyle = 'notes';
   let card = 4;
+  let mxLabels = store.get('mxLabels') === 'movable' ? 'movable' : 'fixed';
+  let mxShow = store.get('mxShow') === 'notes' ? 'notes' : 'num';
+  let mxSel = [];      // selected matrix cells, in the order chosen: [[row, col], ...]
+  let mxSelName = '';  // e.g. "P5" when a whole row form was picked
 
   const pc = (x) => x < 10 || x > 11 ? String(x) : notation === 'te' ? 'TE'[x - 10] : notation === 'ab' ? 'AB'[x - 10] : String(x);
   // Compact "[0146]" when every pc is one character, otherwise comma separated.
   const fmt = (pcs, br = '[]') => {
     const parts = pcs.map(pc);
-    const sep = parts.some((p) => p.length > 1) ? ',' : '';
-    return br[0] + parts.join(sep) + br[1];
+    return br[0] + parts.join(parts.some((p) => p.length > 1) ? ',' : '') + br[1];
   };
   const vec = (v) => '<' + v.join('') + '>';
   const NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-
   // Spellings the parser reads back, used when the user is typing note names.
   const SPELL = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
-  let inputStyle = 'notes';
-  let tokens = [];
+  const notesOf = (pcs) => pcs.map((x) => NAMES[x]).join(' ');
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const writeSet = (pcs) => pcs.map((x) => inputStyle === 'notes' ? SPELL[x] : pc(x)).join(' ');
+  const sortU = (a) => [...new Set(a.map(F.mod12))].sort((x, y) => x - y);
+  const scButton = (e, extra = '') => `<button type="button" class="sc" data-load="${e.key}"><b>${e.name}</b>${e.card ? fmt(e.prime, '()') : '( )'}${extra}</button>`;
+  const link = (e) => e ? `<button type="button" class="linkish" data-load="${e.key}">${e.name}</button>` : '—';
 
-  function setInput(pcs) {
-    $('pcs').value = writeSet(pcs);
+  function setInput(pcs, order) {
+    current = sortU(pcs);
+    $('pcs').value = writeSet(order || current);
     tokens = F.parseTokens($('pcs').value);
     $('err').textContent = '';
-    current = pcs;
-    render();
+    renderActive();
   }
+  function readInput() {
+    const v = $('pcs').value;
+    tokens = F.parseTokens(v);
+    if (v.trim()) inputStyle = /\d/.test(v) ? 'numbers' : 'notes';
+    current = sortU(tokens.map((t) => t.pc));
+  }
+
+  // ---- tabs ----
+  function showTab(t) {
+    tab = t;
+    store.set('tab', t);
+    $('tabs').querySelectorAll('[data-tab]').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === t));
+    document.querySelectorAll('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== t; });
+    const solo = t === 'matrix' || t === 'list';
+    $('inputPanel').hidden = solo;
+    $('main').classList.toggle('solo', solo);
+    renderActive();
+  }
+  $('tabs').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-tab]');
+    if (b) showTab(b.dataset.tab);
+  });
+
+  function renderActive() {
+    drawClock();
+    $('play').disabled = !current.length;
+    if (tab === 'set') renderSet();
+    else if (tab === 'sub') renderSub();
+    else if (tab === 'forms') { renderForms(); renderCompare(); }
+    else if (tab === 'matrix') renderMatrix();
+    else renderTable();
+  }
+
+  // Anything carrying data-load (a set class) or data-set (literal pcs) opens it in the PC Set tab.
+  document.addEventListener('click', (ev) => {
+    const l = ev.target.closest('[data-load]');
+    const s = ev.target.closest('[data-set]');
+    if (l) { setInput(F.byPrime[l.dataset.load].prime); showTab('set'); }
+    else if (s) { setInput(s.dataset.set ? s.dataset.set.split(',').map(Number) : []); showTab('set'); }
+    else return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
 
   // ---- clock ----
   const clock = $('clock');
@@ -281,13 +376,16 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
       const [x, y] = pos(i);
       return `<g class="node" data-pc="${i}" tabindex="0" role="button" aria-label="Pitch class ${i} (${NAMES[i]})"><circle cx="${x}" cy="${y}" r="19"></circle><text x="${x}" y="${y}" id="nodelabel${i}">${i}</text></g>`;
     }).join('');
-  const toggle = (i) => setInput(current.includes(i) ? current.filter((x) => x !== i) : [...current, i].sort((a, b) => a - b));
+  const toggle = (i) => {
+    const order = tokens.map((t) => t.pc);
+    setInput(current.includes(i) ? current.filter((x) => x !== i) : [...current, i],
+      current.includes(i) ? order.filter((x) => x !== i) : [...order, i]);
+  };
   clock.addEventListener('click', (e) => { const g = e.target.closest('.node'); if (g) toggle(+g.dataset.pc); });
   clock.addEventListener('keydown', (e) => {
     const g = e.target.closest('.node');
     if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggle(+g.dataset.pc); }
   });
-
   function drawClock() {
     clock.querySelectorAll('.node').forEach((g) => {
       const i = +g.dataset.pc;
@@ -298,96 +396,124 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
     $('poly').setAttribute('points', current.length > 1 ? current.map((i) => pos(i).join(',')).join(' ') : '');
   }
 
-  // ---- analysis ----
-  const link = (e) => e ? `<button type="button" data-load="${e.key}">${e.name}</button>` : '—';
-
-  function render() {
-    drawClock();
-    renderSteps();
-    $('play').disabled = !current.length;
-    const out = $('analysis');
-    if (!current.length) {
-      out.innerHTML = `<div class="label">Analysis</div><p style="margin:0;color:var(--muted)">Enter pitch classes or tap the clock to see the set's Forte name, prime form and interval vector.</p>`;
-      renderCompare();
-      highlightRow(null);
-      return;
-    }
-    const id = F.identify(current);
-    const e = id.entry;
-    const inv = e.invariance;
-    out.innerHTML = `
-      <div class="label">Analysis</div>
-      <div class="result-head">
-        <div class="forte-name">${e.name}</div>
-        <div style="display:grid;gap:4px">
-          <div class="prime-big">${fmt(e.prime, '()')}</div>
-          <div>${e.zPartner ? `<span class="tag">Z-related to ${e.zPartner.name}</span> ` : ''}${RAHN_DIFF.has(e.name) ? `<span class="tag" title="Rahn's method gives a different prime form">Forte ≠ Rahn</span>` : ''}</div>
-        </div>
-      </div>
-      <dl class="facts">
-        <div><dt>Normal order</dt><dd>${fmt(id.normal)}</dd></div>
-        <div><dt>Prime form</dt><dd>${fmt(e.prime, '()')}</dd></div>
-        <div><dt>Your set is</dt><dd>${id.ops.join(', ') || '—'} <span class="sub">of the prime</span></dd></div>
-        <div><dt>Notes</dt><dd style="font-family:var(--body)">${id.pcs.map((x) => NAMES[x]).join(' ')}</dd></div>
-        <div style="grid-column:1/-1"><dt>Interval-class vector</dt><dd><div class="icv">${e.vector.map((n, i) => `<span><b>${n}</b><i>ic${i + 1}</i></span>`).join('')}</div></dd></div>
-        <div><dt>Complement</dt><dd>${link(e.complement)}</dd></div>
-        <div><dt>Z-partner</dt><dd>${link(e.zPartner)}</dd></div>
-        <div><dt>M-partner (M5)</dt><dd>${link(e.mPartner)}</dd></div>
-        <div><dt>Symmetry</dt><dd>${inv[0]}×Tn, ${inv[1]}×TnI <span class="sub">${inv[1] ? 'inversionally symmetric' : 'not inversionally symmetric'}</span></dd></div>
-        <div><dt>Distinct forms</dt><dd>${24 / (inv[0] + inv[1])} <span class="sub">of 24 Tn/TnI</span></dd></div>
-        <div><dt>Invariance vector</dt><dd>${'(' + inv.join('') + ')'}</dd></div>
-        <div><dt>Interval succession</dt><dd>${fmt(e.cycle, '{}')}</dd></div>
-      </dl>`;
-    renderCompare();
-    highlightRow(e.key);
-  }
-
-  $('analysis').addEventListener('click', (ev) => {
-    const b = ev.target.closest('[data-load]');
-    if (b) setInput(F.byPrime[b.dataset.load].prime.slice());
-  });
-
   // ---- input ----
-  function readInput() {
-    const v = $('pcs').value;
-    tokens = F.parseTokens(v);
-    if (v.trim()) inputStyle = /\d/.test(v) ? 'numbers' : 'notes';
-    current = [...new Set(tokens.map((t) => t.pc))].sort((a, b) => a - b);
-  }
   $('pcs').addEventListener('input', () => {
     try {
       readInput();
       $('err').textContent = '';
-      render();
+      renderActive();
     } catch (err) {
       $('err').textContent = err.message;
     }
   });
-
   $('ops').addEventListener('click', (ev) => {
     const op = ev.target.closest('[data-op]')?.dataset.op;
     if (!op) return;
-    const sort = (a) => [...new Set(a)].sort((x, y) => x - y);
-    const next = {
-      't-1': () => F.transpose(current, -1),
-      t1: () => F.transpose(current, 1),
-      i0: () => F.invert(current, 0),
-      m5: () => F.multiply(current, 5),
-      comp: () => F.complement(current),
-      prime: () => F.primeForm(current),
-      clear: () => [],
-    }[op]();
-    setInput(sort(next));
+    const order = tokens.map((t) => t.pc);
+    const ordered = {
+      't-1': () => F.transpose(order, -1),
+      t1: () => F.transpose(order, 1),
+      i0: () => F.invert(order, 0),
+      m5: () => F.multiply(order, 5),
+    }[op];
+    if (ordered) { const o = ordered(); setInput(o, o); return; }
+    setInput({ comp: () => F.complement(current), prime: () => F.primeForm(current), clear: () => [] }[op]());
   });
 
-  // ---- compare ----
-  // Can some Tn or TnI form of the smaller set be found inside the bigger one?
-  function abstractInclusion(small, big) {
-    for (let n = 0; n < 12; n++) {
-      if (F.transpose(small, n).every((x) => big.includes(x))) return `T${n}`;
-      if (F.invert(small, n).every((x) => big.includes(x))) return `T${n}I`;
-    }
-    return null;
+  // ---- PC Set tab ----
+  function relCard(title, pcs) {
+    if (!pcs.length) return `<div class="rel"><div class="label">${title}</div><p class="muted">Empty set</p></div>`;
+    const id = F.identify(pcs), e = id.entry;
+    return `<div class="rel">
+      <div class="rel-head"><div class="label">${title}</div><button type="button" class="chip" data-set="${id.pcs.join(',')}">Open</button></div>
+      <div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap"><span class="rel-name">${e.name}</span><span class="mono">${notesOf(id.pcs)}</span></div>
+      <dl class="facts">
+        <div><dt>Normal form</dt><dd>${fmt(id.normal)}</dd></div>
+        <div><dt>Prime form</dt><dd>${fmt(e.prime, '()')}</dd></div>
+        <div><dt>IC vector</dt><dd>${vec(e.vector)}</dd></div>
+        <div><dt>Z-mate</dt><dd>${e.zPartner ? e.zPartner.name : '—'}</dd></div>
+      </dl>
+    </div>`;
+  }
+
+  function renderSet() {
+    const out = $('setPanel');
+    if (!current.length) { out.innerHTML = `<p class="muted">Type notes or tap the clock.</p>`; return; }
+    const id = F.identify(current), e = id.entry, sym = F.symmetries(current);
+    out.innerHTML = `
+      <div class="result-head">
+        <div class="forte-name">${e.name}</div>
+        <div style="display:grid;gap:4px">
+          <div class="prime-big">${fmt(e.prime, '()')}</div>
+          <div>${e.zPartner ? `<span class="tag">Z-mate ${e.zPartner.name}</span> ` : ''}${RAHN_DIFF.has(e.name) ? `<span class="tag" title="Rahn's method gives a different prime form">Forte ≠ Rahn</span>` : ''}</div>
+        </div>
+      </div>
+      <dl class="facts">
+        <div><dt>Normal form</dt><dd>${fmt(id.normal)}</dd></div>
+        <div><dt>Prime form</dt><dd>${fmt(e.prime, '()')}</dd></div>
+        <div><dt>Notes</dt><dd style="font-family:var(--body)">${notesOf(id.pcs)}</dd></div>
+        <div><dt>From prime</dt><dd>${id.ops.join(', ')}</dd></div>
+        <div class="wide"><dt>Interval-class vector</dt><dd><div class="icv">${e.vector.map((n, i) => `<span><b>${n}</b><i>ic${i + 1}</i></span>`).join('')}</div></dd></div>
+        <div><dt>Z-mate</dt><dd>${link(e.zPartner)}</dd></div>
+        <div><dt>Complement</dt><dd>${link(e.complement)}</dd></div>
+        <div><dt>M5 partner</dt><dd>${link(e.mPartner)}</dd></div>
+        <div><dt>Distinct forms</dt><dd>${24 / (sym.tn.length + sym.tni.length)} <span class="sub">of 24</span></dd></div>
+        <div><dt>Tn invariance</dt><dd>${sym.tn.map((n) => 'T' + n).join(', ')} <span class="sub">(${sym.tn.length})</span></dd></div>
+        <div><dt>TnI invariance</dt><dd>${sym.tni.length ? sym.tni.map((n) => `T${n}I`).join(', ') : 'none'} <span class="sub">(${sym.tni.length})</span></dd></div>
+        <div><dt>Invariance vector</dt><dd>(${e.invariance.join('')})</dd></div>
+        <div><dt>Interval succession</dt><dd>${fmt(id.normal.map((x, i, a) => i ? F.mod12(x - a[i - 1]) : null).slice(1), '<>')}</dd></div>
+      </dl>
+      <div class="related">
+        ${relCard('Inversion (T0I)', F.invert(current, 0))}
+        ${relCard('Complement', F.complement(current))}
+      </div>`;
+  }
+
+  // ---- Subsets tab ----
+  function renderSub() {
+    const out = $('subPanel');
+    if (!current.length) { out.innerHTML = `<p class="muted">Type notes or tap the clock.</p>`; return; }
+    const e = F.identify(current).entry;
+    const byCard = (items, get) => {
+      const m = new Map();
+      for (const it of items) { const c = get(it).card; if (!m.has(c)) m.set(c, []); m.get(c).push(it); }
+      return [...m];
+    };
+    const subs = byCard(F.subsetClasses(current), (x) => x.entry);
+    const sups = byCard(F.supersetClasses(current), (x) => x);
+    const subHtml = subs.length ? subs.map(([c, items]) => `
+      <div class="group">
+        <div class="group-title"><h3>${c} notes</h3><span class="label">${items.length} set class${items.length > 1 ? 'es' : ''}</span></div>
+        <div class="sclist">${items.map((x) => scButton(x.entry, `<i>×${x.count}</i>`)).join('')}</div>
+      </div>`).join('') : `<p class="muted">No subsets with 2 or more notes.</p>`;
+    const supHtml = sups.length ? sups.map(([c, items], k) => `
+      <details class="group"${k < 2 ? ' open' : ''}>
+        <summary><h3 style="display:inline">${c} notes</h3> <span class="label">${items.length} set class${items.length > 1 ? 'es' : ''}</span></summary>
+        <div class="sclist">${items.map((x) => scButton(x)).join('')}</div>
+      </details>`).join('') : `<p class="muted">No larger set classes.</p>`;
+    out.innerHTML = `
+      <h2>Subsets of ${e.name} ${fmt(e.prime, '()')}</h2>
+      <p class="muted" style="font-size:13px">×n = how many times it occurs in ${fmt(current, '{}')}</p>
+      ${subHtml}
+      <h2 style="margin-top:8px">Supersets</h2>
+      ${supHtml}`;
+  }
+
+  // ---- Tn / TnI tab ----
+  function renderForms() {
+    const out = $('formsOut');
+    if (!current.length) { out.innerHTML = `<p class="muted">Type notes or tap the clock.</p>`; return; }
+    const fs = F.forms(current), cur = F.key(current);
+    const cell = (f) => {
+      const nf = F.normalForm(f.pcs);
+      return `<td class="f${F.key(f.pcs) === cur ? ' same' : ''}" data-set="${f.pcs.join(',')}">${fmt(nf)}<small>${notesOf(nf)}</small></td>`;
+    };
+    out.innerHTML = `
+      <h2 style="margin-bottom:10px">All forms of ${fmt(current, '{}')}</h2>
+      <div class="scroll"><table class="forms">
+        <thead><tr><th></th><th>Tn</th><th></th><th>TnI</th></tr></thead>
+        <tbody>${[...Array(12).keys()].map((n) => `<tr><td class="op">T${n}</td>${cell(fs[n])}<td class="op">T${n}I</td>${cell(fs[12 + n])}</tr>`).join('')}</tbody>
+      </table></div>`;
   }
 
   function renderCompare() {
@@ -395,21 +521,20 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
     let b;
     try { b = F.parse($('pcs2').value); } catch (err) { out.innerHTML = `<p class="err">${esc(err.message)}</p>`; return; }
     const a = current;
-    if (!a.length || !b.length) { out.innerHTML = `<p style="color:var(--muted)">Enter both sets to compare them.</p>`; return; }
+    if (!a.length || !b.length) { out.innerHTML = ''; return; }
     const ea = F.identify(a).entry, eb = F.identify(b).entry;
-    const lines = [`<p><span class="mono">${fmt(a)}</span> is <b>${ea.name}</b>; <span class="mono">${fmt(b)}</span> is <b>${eb.name}</b>.</p>`];
+    const lines = [`<p><span class="mono">${fmt(a, '{}')}</span> is <b>${ea.name}</b>; <span class="mono">${fmt(b, '{}')}</span> is <b>${eb.name}</b>.</p>`];
     const ops = F.relate(a, b);
-    if (ops.length) lines.push(`<p>Same set class. The first set becomes the second by <b class="mono">${ops.join(', ')}</b>.</p>`);
-    else if (ea.zPartner === eb) lines.push(`<p>Z-related: different set classes with the same interval vector <span class="mono">${vec(ea.vector)}</span>.</p>`);
+    if (ops.length) lines.push(`<p>Same set class: <b class="mono">${ops.join(', ')}</b> maps the first onto the second.</p>`);
+    else if (ea.zPartner === eb) lines.push(`<p>Z-related: same IC vector <span class="mono">${vec(ea.vector)}</span>.</p>`);
     else if (ea.complement === eb && ea.card + eb.card === 12) lines.push(`<p>Complementary set classes.</p>`);
     else lines.push(`<p>Different set classes.</p>`);
     if (ea.card !== eb.card) {
-      const [s, l, sn, ln] = ea.card < eb.card ? [a, b, 'first', 'second'] : [b, a, 'second', 'first'];
-      const lit = s.every((x) => l.includes(x));
-      const abs = abstractInclusion(s, l);
-      if (lit) lines.push(`<p>The ${sn} set is a literal subset of the ${ln}.</p>`);
-      else if (abs) lines.push(`<p>The ${sn} set's class is a subset class of the ${ln} (${abs} of the ${sn} set is inside it).</p>`);
-      else lines.push(`<p>No form of the ${sn} set fits inside the ${ln}.</p>`);
+      const [s, l, sn, ln] = ea.card < eb.card ? [a, b, 'First', 'second'] : [b, a, 'Second', 'first'];
+      const abs = F.abstractInclusion(s, l);
+      if (s.every((x) => l.includes(x))) lines.push(`<p>${sn} set is a literal subset of the ${ln}.</p>`);
+      else if (abs) lines.push(`<p>${sn} set's class is a subset class of the ${ln} (via ${abs}).</p>`);
+      else lines.push(`<p>${sn} set's class is not a subset of the ${ln}.</p>`);
     }
     const common = a.filter((x) => b.includes(x));
     lines.push(`<p>Common tones: <span class="mono">${common.length ? fmt(common, '{}') : 'none'}</span></p>`);
@@ -417,10 +542,98 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
   }
   $('pcs2').addEventListener('input', renderCompare);
 
-  // ---- catalog ----
-  const CARDS = [...Array(13).keys()];
+  // ---- Matrix tab ----
+  function readRow() {
+    const toks = F.parseTokens($('row').value);
+    const seen = new Map();
+    for (const t of toks) {
+      if (seen.has(t.pc)) throw new Error(`${t.label} repeats ${seen.get(t.pc)}. Each pitch class can appear once in a row.`);
+      seen.set(t.pc, t.label);
+    }
+    return toks.map((t) => t.pc);
+  }
+
+  function renderMatrix() {
+    let row;
+    try { row = readRow(); $('rowErr').textContent = ''; } catch (err) { $('rowErr').textContent = err.message; return; }
+    $('mxLabels').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === mxLabels));
+    $('mxShow').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === mxShow));
+    const table = $('mx');
+    if (!row.length) { table.innerHTML = ''; $('mxSel').innerHTML = '<span class="muted">Enter a row.</span>'; return; }
+    const M = F.matrix(row), n = row.length;
+    const lab = (x) => mxLabels === 'fixed' ? x : F.mod12(x - row[0]);
+    const show = (x) => mxShow === 'notes' ? NAMES[x] : pc(x);
+    const selKeys = new Set(mxSel.map(([i, j]) => i + ',' + j));
+    const hb = (line, text) => `<th><button type="button" data-line="${line}" aria-label="Select ${text}">${text}</button></th>`;
+    table.innerHTML =
+      `<thead><tr><th></th>${M[0].map((x, j) => hb('I:' + j, 'I' + lab(x))).join('')}<th></th></tr></thead>` +
+      `<tbody>${M.map((r, i) => `<tr>${hb('P:' + i, 'P' + lab(r[0]))}${r.map((x, j) =>
+        `<td class="${selKeys.has(i + ',' + j) ? 'sel' : ''}${i === 0 ? ' first' : ''}"><button type="button" data-cell="${i},${j}">${show(x)}</button></td>`).join('')}${hb('R:' + i, 'R' + lab(r[0]))}</tr>`).join('')}</tbody>` +
+      `<tfoot><tr><th></th>${M[0].map((x, j) => hb('RI:' + j, 'RI' + lab(x))).join('')}<th></th></tr></tfoot>`;
+    renderMxSel(M);
+  }
+
+  function renderMxSel(M) {
+    const out = $('mxSel');
+    if (!mxSel.length) { out.innerHTML = '<span class="muted">Tap cells or a row label to pick a segment.</span>'; return; }
+    const ordered = mxSel.map(([i, j]) => M[i][j]);
+    const e = F.identify(ordered).entry;
+    out.innerHTML = `
+      ${mxSelName ? `<span class="label">${mxSelName}</span>` : ''}
+      <span class="mono">${ordered.map((x) => mxShow === 'notes' ? NAMES[x] : pc(x)).join(' ')}</span>
+      <span>→ <b>${e.name}</b> <span class="mono">${fmt(e.prime, '()')}</span></span>
+      <span style="display:flex;gap:6px;margin-left:auto">
+        <button type="button" class="chip" id="mxPlay">▶ Play</button>
+        <button type="button" class="chip" id="mxOpen">Open in PC Set</button>
+        <button type="button" class="chip ghost" id="mxClear">Clear</button>
+      </span>`;
+    $('mxPlay').onclick = () => play(ordered);
+    $('mxOpen').onclick = () => { inputStyle = mxShow === 'notes' ? 'notes' : inputStyle; setInput(ordered, [...new Set(ordered)]); showTab('set'); };
+    $('mxClear').onclick = () => { mxSel = []; mxSelName = ''; renderMatrix(); };
+  }
+
+  $('mx').addEventListener('click', (ev) => {
+    let row;
+    try { row = readRow(); } catch { return; }
+    const n = row.length;
+    const cellBtn = ev.target.closest('[data-cell]');
+    const lineBtn = ev.target.closest('[data-line]');
+    if (cellBtn) {
+      const [i, j] = cellBtn.dataset.cell.split(',').map(Number);
+      if (mxSelName) mxSel = []; // a tap after picking a whole row form starts a new segment
+      const k = mxSel.findIndex(([a, b]) => a === i && b === j);
+      if (k >= 0) mxSel.splice(k, 1); else mxSel.push([i, j]);
+      mxSelName = '';
+    } else if (lineBtn) {
+      const [kind, idx] = lineBtn.dataset.line.split(':');
+      const x = +idx, fwd = [...Array(n).keys()], back = [...fwd].reverse();
+      mxSel = {
+        P: fwd.map((j) => [x, j]), R: back.map((j) => [x, j]),
+        I: fwd.map((i) => [i, x]), RI: back.map((i) => [i, x]),
+      }[kind];
+      mxSelName = lineBtn.textContent;
+    } else return;
+    renderMatrix();
+  });
+  $('row').addEventListener('input', () => { mxSel = []; mxSelName = ''; renderMatrix(); });
+  $('useSet').addEventListener('click', () => {
+    if (!current.length) return;
+    $('row').value = writeSet([...new Set(tokens.map((t) => t.pc))]);
+    mxSel = []; mxSelName = '';
+    renderMatrix();
+  });
+  $('mxLabels').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-v]'); if (!b) return;
+    mxLabels = b.dataset.v; store.set('mxLabels', mxLabels); mxSelName = ''; renderMatrix();
+  });
+  $('mxShow').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-v]'); if (!b) return;
+    mxShow = b.dataset.v; store.set('mxShow', mxShow); renderMatrix();
+  });
+
+  // ---- Set list tab ----
   $('cards').innerHTML = `<button type="button" data-c="all" aria-pressed="false">All</button>` +
-    CARDS.map((c) => `<button type="button" data-c="${c}" aria-pressed="${c === card}">${c}</button>`).join('');
+    [...Array(13).keys()].map((c) => `<button type="button" data-c="${c}" aria-pressed="${c === card}">${c}</button>`).join('');
   $('cards').addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-c]');
     if (!b) return;
@@ -439,9 +652,10 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
       }
       return card === 'all' || e.card === card;
     });
+    const curKey = current.length ? F.key(F.primeForm(current)) : null;
     $('rows').innerHTML = rows.map((e) => `
-      <tr data-key="${e.key}">
-        <td class="nm">${e.name}${RAHN_DIFF.has(e.name) ? '<span class="diff">≠ Rahn</span>' : ''}</td>
+      <tr data-load="${e.key}" class="${e.key === curKey ? 'current' : ''}">
+        <td class="nm">${e.name}${RAHN_DIFF.has(e.name) ? '<span class="diff" title="Rahn\'s method gives a different prime form">≠ Rahn</span>' : ''}</td>
         <td>${e.card ? fmt(e.prime) : '[ ]'}</td>
         <td>${vec(e.vector)}</td>
         <td>${e.zPartner ? e.zPartner.name : ''}</td>
@@ -449,22 +663,13 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
         <td>${e.mPartner.name}</td>
         <td>(${e.invariance.join('')})</td>
       </tr>`).join('') || `<tr><td colspan="7" style="font-family:var(--body);color:var(--muted)">No set class matches “${esc($('search').value)}”.</td></tr>`;
-    highlightRow(current.length ? F.key(F.primeForm(current)) : null);
   }
-  function highlightRow(key) {
-    $('rows').querySelectorAll('tr').forEach((tr) => tr.classList.toggle('current', tr.dataset.key === key));
-  }
-  $('rows').addEventListener('click', (ev) => {
-    const tr = ev.target.closest('tr[data-key]');
-    if (tr) { setInput(F.byPrime[tr.dataset.key].prime.slice()); $('pcs').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-  });
 
   // ---- notation ----
   function applyNotation() {
     $('notation').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.n === notation));
-    if (inputStyle === 'numbers') $('pcs').value = writeSet(current);
-    render();
-    renderTable();
+    if (inputStyle === 'numbers' && current.length) $('pcs').value = writeSet(tokens.map((t) => t.pc));
+    renderActive();
   }
   $('notation').addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-n]');
@@ -473,101 +678,6 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
     store.set('notation', notation);
     applyNotation();
   });
-
-  // ---- step by step ----
-  const ord = (k) => k + 1 + (['st', 'nd', 'rd'][k] && k < 3 ? ['st', 'nd', 'rd'][k] : 'th');
-  const gapName = (j, n) => j === n - 1 ? 'first → last' : `first → ${ord(j)}`;
-  const nums = (pcs) => pcs.map(pc).join(' ');
-  const notesOf = (pcs) => pcs.map((x) => NAMES[x]).join(' ');
-
-  function rotationTable(st) {
-    const n = st.pcs.length;
-    const out = new Set(st.rotations.map((_, i) => i).filter((i) => !st.rounds.length || !st.rounds[st.rounds.length - 1].kept.includes(i)));
-    // The comparison that eliminated each rotation, so that cell can be outlined.
-    const killedAt = {};
-    for (const r of st.rounds) for (const i of r.before) if (!r.kept.includes(i) && killedAt[i] === undefined) killedAt[i] = r.j;
-    const cols = [n - 1, ...[...Array(n - 2).keys()].map((k) => k + 1)];
-    const head = `<tr><th>Rotation</th>${cols.map((j) => `<th>1st→${j === n - 1 ? 'last' : ord(j)}</th>`).join('')}</tr>`;
-    const rows = st.rotations.map((r, i) => {
-      const cls = i === st.winner ? 'win' : out.has(i) ? 'out' : '';
-      const decisive = killedAt[i];
-      return `<tr class="${cls}"><td class="mono">${nums(r.order)}<small>${notesOf(r.order)}</small></td>${cols.map((j) => `<td class="mono${decisive === j ? ' key' : ''}">${r.dist[j]}</td>`).join('')}</tr>`;
-    }).join('');
-    return `<div class="table-wrap" style="max-height:none"><table class="rot">${head}${rows}</table></div>`;
-  }
-
-  function roundsText(st) {
-    const n = st.pcs.length;
-    if (n < 2) return '<p>With one note there is nothing to compare.</p>';
-    const r0 = st.rounds[0];
-    const parts = [];
-    parts.push(r0.kept.length === 1
-      ? `Only one rotation has the smallest span from first to last (${r0.min}), so it wins.`
-      : `${r0.kept.length} rotations tie for the smallest span from first to last (${r0.min}).`);
-    for (const r of st.rounds.slice(1)) {
-      parts.push(r.kept.length === r.before.length
-        ? `They also tie ${gapName(r.j, n)} (${r.min}).`
-        : `Forte breaks the tie with the interval ${gapName(r.j, n)}: the smallest is ${r.min}${r.kept.length === 1 ? ', so that rotation wins' : ''}.`);
-    }
-    if (st.tiedAtEnd) parts.push(`They still tie, because the set is symmetrical. Take the one that starts on the lowest number.`);
-    return `<p>${parts.join(' ')}</p>`;
-  }
-
-  function renderSteps() {
-    const out = $('steps');
-    if (!current.length) { out.innerHTML = '<p style="color:var(--muted);margin:0">Type some notes above to see the work.</p>'; return; }
-    const ps = F.primeFormSteps(current);
-    const e = F.byPrime[F.key(ps.prime)];
-    const seen = new Set();
-    const chips = tokens.map((t) => {
-      const dup = seen.has(t.pc); seen.add(t.pc);
-      return `<span class="${dup ? 'dup' : ''}"><b>${esc(t.label)}</b> = ${pc(t.pc)}</span>`;
-    }).join('');
-    const hasDup = tokens.length > current.length;
-    const n = current.length;
-    const zeroA = ps.original.normal.map((x) => `${pc(x)} − ${pc(ps.original.normal[0])} = ${pc(F.mod12(x - ps.original.normal[0]))}`);
-    let decideText;
-    if (ps.winner === 'same') decideText = `Both are the same, so the set is inversionally symmetrical and either one is the prime form.`;
-    else decideText = `They first differ ${gapName(ps.decided.j, n)}: ${ps.decided.a} vs ${ps.decided.b}. The smaller one, the ${ps.winner === 'original' ? 'original' : 'inversion'}, is packed tighter to the left, so it is the prime form.`;
-    const sameSpan = ps.a[n - 1] === ps.b[n - 1];
-    out.innerHTML = `
-      <div class="step"><span class="num"></span><div>
-        <h3>Turn the notes into numbers</h3>
-        <p>C = 0, C♯/D♭ = 1, D = 2 … B = 11. Octave and spelling don't matter.${hasDup ? ' Repeated pitch classes count once.' : ''}</p>
-        <div class="notechips">${chips}</div>
-      </div></div>
-      <div class="step"><span class="num"></span><div>
-        <h3>Put them in order, low to high</h3>
-        <p class="result-line">${nums(ps.original.pcs)} <span class="hint">(${notesOf(ps.original.pcs)})</span></p>
-      </div></div>
-      <div class="step"><span class="num"></span><div>
-        <h3>Find the normal order</h3>
-        <p>Start the list on each note in turn. Each number in the table is how many half steps that note is above the first one. Keep the rotation with the smallest span from first to last.</p>
-        ${rotationTable(ps.original)}
-        ${roundsText(ps.original)}
-        <p class="result-line">Normal order: <b>[${nums(ps.original.normal)}]</b></p>
-      </div></div>
-      <div class="step"><span class="num"></span><div>
-        <h3>Transpose it to start on 0</h3>
-        <p>Subtract the first number from every number (add 12 if you go below 0): ${zeroA.join(', ')}.</p>
-        <p class="result-line">(${nums(ps.a)})</p>
-      </div></div>
-      <div class="step"><span class="num"></span><div>
-        <h3>Do the same for the inversion</h3>
-        <p>Invert each pitch class (12 − x): ${ps.original.pcs.map((x) => `${pc(x)} → ${pc((12 - x) % 12)}`).join(', ')}. Then find that set's normal order and transpose it to 0.</p>
-        <details class="inv"><summary>Show the inversion's rotations</summary>
-          ${rotationTable(ps.inversion)}
-          ${roundsText(ps.inversion)}
-        </details>
-        <p class="result-line">Normal order [${nums(ps.inversion.normal)}] → (${nums(ps.b)})</p>
-      </div></div>
-      <div class="step"><span class="num"></span><div>
-        <h3>Pick the one packed tighter to the left</h3>
-        <p>Compare (${nums(ps.a)}) and (${nums(ps.b)}) the Forte way: first → last${sameSpan && n > 2 ? ', then first → 2nd, first → 3rd' : ''}…</p>
-        <p>${decideText}</p>
-        <p class="result-line">Prime form: <b>(${nums(ps.prime)})</b>, Forte <b>${e.name}</b></p>
-      </div></div>`;
-  }
 
   // ---- sound ----
   let audio;
@@ -582,24 +692,25 @@ details.method p { max-width: 68ch; margin: 8px 0 0; }
     o.start(start);
     o.stop(start + dur + 0.05);
   }
-  $('play').addEventListener('click', () => {
-    if (!current.length) return;
+  // Plays the notes in order, each above the one before, then together as a chord.
+  function play(order) {
+    if (!order.length) return;
     try {
       audio = audio || new (window.AudioContext || window.webkitAudioContext)();
       audio.resume?.();
     } catch { return; }
-    // Play in the order typed, each note above the one before, then as a chord.
-    const order = tokens.length ? tokens.map((t) => t.pc) : current;
     let prev = -Infinity;
     const midi = order.map((p) => { let m = 60 + p; while (m <= prev) m += 12; prev = m; return m; });
-    while (midi[midi.length - 1] > 84) for (let i = 0; i < midi.length; i++) midi[i] -= 12;
-    const t0 = audio.currentTime + 0.05, step = 0.32;
+    while (midi[midi.length - 1] > 84 && midi[0] > 48) for (let i = 0; i < midi.length; i++) midi[i] -= 12;
+    const t0 = audio.currentTime + 0.05, step = 0.3;
     midi.forEach((m, i) => tone(m, t0 + i * step, 0.6, 0.22));
     const chordAt = t0 + midi.length * step + 0.15;
     midi.forEach((m) => tone(m, chordAt, 1.8, 0.5 / Math.max(2, midi.length)));
-  });
+  }
+  $('play').addEventListener('click', () => play(tokens.length ? [...new Set(tokens.map((t) => t.pc))] : current));
 
   readInput();
-  applyNotation();
+  $('notation').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.n === notation));
+  showTab(tab);
 })();
 </script>

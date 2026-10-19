@@ -62,16 +62,28 @@ same(F.parse('t e 0'), [0, 10, 11]);
 same(F.parse('0 1 a b'), [0, 1, 10, 11]);
 assert.throws(() => F.parse('C H'));
 
-// Shown work agrees with the direct computation for every subset.
-for (let m = 1; m < 4096; m++) {
-  const s = [...Array(12).keys()].filter((i) => (m >> i) & 1);
-  const st = F.primeFormSteps(s);
-  same(st.original.normal, F.normalForm(s));
-  same(st.prime, F.primeForm(s));
-}
-const st = F.normalFormSteps([0, 1, 3, 7, 8]);
-same(st.normal, [0, 1, 3, 7, 8]);
-same(st.rounds.map((r) => r.j), [4, 1, 2]);
+// Symmetry, forms, subsets, supersets, matrix.
+same(F.symmetries([0, 4, 8]), { tn: [0, 4, 8], tni: [0, 4, 8] });
+same(F.symmetries([0, 1, 4]), { tn: [0], tni: [] });
+same(F.symmetries([0, 2, 7]), { tn: [0], tni: [2] });
+assert.equal(F.forms([0, 4, 7]).length, 24);
+same(F.forms([0, 4, 7])[13].pcs, [1, 6, 9]);
+// (037) contains 3 dyads: ic3, ic4, ic5 (2-3, 2-4, 2-5).
+same(F.subsetClasses([0, 3, 7]).map((x) => x.entry.name + 'x' + x.count), ['2-3x1', '2-4x1', '2-5x1']);
+// The diatonic set holds three major and three minor triads plus a diminished one: 3-11 x6, 3-10 x1.
+const dia = F.subsetClasses(F.parse('C D E F G A B'));
+assert.equal(dia.find((x) => x.entry.name === '3-11').count, 6);
+assert.equal(dia.find((x) => x.entry.name === '3-10').count, 1);
+// Every subset count of a set adds up to 2^n minus the empty set, singletons and the whole set.
+assert.equal(dia.reduce((t, x) => t + x.count, 0), 128 - 1 - 7 - 1);
+const sup = F.supersetClasses([0, 3, 7]).map((e) => e.name);
+assert.ok(sup.includes('4-26') && sup.includes('7-35') && !sup.includes('4-1'));
+assert.equal(F.abstractInclusion([0, 4, 7], [2, 5, 9, 11]), 'T9I');
+assert.equal(F.abstractInclusion([0, 1, 2], [0, 4, 8]), null);
+const mx = F.matrix([0, 11, 3, 4]);
+same(mx[0], [0, 11, 3, 4]);
+same(mx.map((r) => r[0]), [0, 1, 9, 8]);
+same(mx[1], [1, 0, 4, 5]);
 assert.throws(() => F.parse('0 13'));
 
 same(F.relate([0, 1, 4], [5, 6, 9]), ['T5']);

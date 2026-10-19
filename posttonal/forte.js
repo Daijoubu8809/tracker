@@ -26,6 +26,7 @@
   const fromKey = (k) => (k === '-' ? [] : [...k].map((c) => parseInt(c, 16)));
   const uniqSorted = (pcs) => [...new Set(pcs.map(mod12))].sort((a, b) => a - b);
   const zeroed = (ord) => ord.map((x) => mod12(x - ord[0]));
+  const sameSet = (a, b) => key(uniqSorted(a)) === key(uniqSorted(b));
 
   // Indices to compare, in Forte's order: last, then 2nd, 3rd, ...
   function forteOrder(n) {
@@ -89,7 +90,6 @@
       list.push(e);
     });
   }
-  const sameSet = (a, b) => key(uniqSorted(a)) === key(uniqSorted(b));
   for (const e of list) {
     const vk = e.vector.join('');
     e.zPartner = list.find((o) => o !== e && o.card === e.card && o.vector.join('') === vk) || null;
@@ -103,12 +103,12 @@
     // Forte's invariance vector: how many Tn, TnI, TnM, TnMI map the set onto itself (A-D)
     // or into its complement (E-H).
     const comp = complement(e.prime);
-    const forms = [(n) => transpose(e.prime, n), (n) => invert(e.prime, n),
+    const maps = [(n) => transpose(e.prime, n), (n) => invert(e.prime, n),
       (n) => transpose(multiply(e.prime, 5), n), (n) => transpose(multiply(e.prime, 7), n)];
     const into = (a, b) => a.every((x) => b.includes(x));
     e.invariance = [
-      ...forms.map((f) => [...Array(12).keys()].filter((n) => sameSet(f(n), e.prime)).length),
-      ...forms.map((f) => (e.card ? [...Array(12).keys()].filter((n) => into(f(n), comp)).length : 0)),
+      ...maps.map((f) => [...Array(12).keys()].filter((n) => sameSet(f(n), e.prime)).length),
+      ...maps.map((f) => (e.card ? [...Array(12).keys()].filter((n) => into(f(n), comp)).length : 0)),
     ];
     // Interval succession around the normal order (Forte's "cycle" column).
     e.cycle = e.prime.length ? e.prime.map((x, i, a) => mod12((a[i + 1] ?? a[0] + 12) - x) || 12) : [];
@@ -179,46 +179,61 @@
   }
   const parse = (text) => uniqSorted(parseTokens(text).map((t) => t.pc));
 
-  // Normal order with the work shown: every rotation, its intervals from the first note,
-  // and which comparison knocked out which rotations.
-  function normalFormSteps(pcs) {
-    const s = uniqSorted(pcs);
-    const rotations = s.map((_, i) => {
-      const order = [...s.slice(i), ...s.slice(0, i)];
-      return { order, dist: order.map((x) => mod12(x - order[0])) };
-    });
-    let alive = rotations.map((_, i) => i);
-    const rounds = [];
-    for (const j of forteOrder(s.length)) {
-      if (alive.length < 2) break;
-      const min = Math.min(...alive.map((i) => rotations[i].dist[j]));
-      const kept = alive.filter((i) => rotations[i].dist[j] === min);
-      rounds.push({ j, min, before: alive, kept });
-      alive = kept;
+  const containsAll = (big, small) => small.every((x) => big.includes(x));
+
+  // The Tn and TnI operations that map this exact set onto itself.
+  function symmetries(pcs) {
+    const s = uniqSorted(pcs), tn = [], tni = [];
+    for (let n = 0; n < 12; n++) {
+      if (sameSet(transpose(s, n), s)) tn.push(n);
+      if (sameSet(invert(s, n), s)) tni.push(n);
     }
-    // Still tied after every comparison means the set is symmetric; Forte takes the one
-    // starting on the lowest pitch class, which is the earliest rotation.
-    return { pcs: s, rotations, rounds, winner: alive[0], tiedAtEnd: alive.length > 1, normal: rotations[alive[0]]?.order ?? [] };
+    return { tn, tni };
   }
 
-  function primeFormSteps(pcs) {
-    const s = uniqSorted(pcs);
-    const original = normalFormSteps(s);
-    const inverted = uniqSorted(s.map((x) => -x));
-    const inversion = normalFormSteps(inverted);
-    const a = zeroed(original.normal), b = zeroed(inversion.normal);
-    let decided = null;
-    for (const j of forteOrder(a.length)) {
-      if (a[j] !== b[j]) { decided = { j, a: a[j], b: b[j] }; break; }
+  // All 24 forms of the set: [{ op, n, inverted, pcs }].
+  function forms(pcs) {
+    const s = uniqSorted(pcs), out = [];
+    for (let n = 0; n < 12; n++) out.push({ op: `T${n}`, n, inverted: false, pcs: uniqSorted(transpose(s, n)) });
+    for (let n = 0; n < 12; n++) out.push({ op: `T${n}I`, n, inverted: true, pcs: uniqSorted(invert(s, n)) });
+    return out;
+  }
+
+  // Set classes of every literal subset (cardinality 2 to n-1), with how many times each occurs.
+  function subsetClasses(pcs) {
+    const s = uniqSorted(pcs), counts = new Map();
+    for (let m = 1; m < (1 << s.length) - 1; m++) {
+      const sub = s.filter((_, i) => (m >> i) & 1);
+      if (sub.length < 2) continue;
+      const e = byPrime[key(primeForm(sub))];
+      counts.set(e, (counts.get(e) || 0) + 1);
     }
-    const prime = !decided || decided.a < decided.b ? a : b;
-    return { original, inverted, inversion, a, b, decided, prime, winner: !decided ? 'same' : decided.a < decided.b ? 'original' : 'inversion' };
+    return [...counts].map(([entry, count]) => ({ entry, count }))
+      .sort((a, b) => a.entry.card - b.entry.card || a.entry.ordinal - b.entry.ordinal);
+  }
+
+  // Set classes (larger, up to 11 notes) that contain some Tn or TnI form of this set.
+  function supersetClasses(pcs) {
+    const s = uniqSorted(pcs), fs = forms(s);
+    return list.filter((e) => e.card > s.length && e.card < 12 && fs.some((f) => containsAll(e.prime, f.pcs)));
+  }
+
+  // Can some Tn or TnI form of `small` be found inside `big`? Returns the first such operation.
+  function abstractInclusion(small, big) {
+    const f = forms(small).find((x) => containsAll(big, x.pcs));
+    return f ? f.op : null;
+  }
+
+  // 12-tone style matrix: row i is the P form that starts on the inversion of row[i] around row[0].
+  function matrix(row) {
+    const r = row.map(mod12);
+    return r.map((x) => r.map((y) => mod12(y + r[0] - x)));
   }
 
   root.Forte = {
     TABLE, list, byPrime, byName, mod12, normalForm, primeForm, intervalVector,
     transpose, invert, multiply, complement, identify, relate, parse, parseTokens, key,
-    normalFormSteps, primeFormSteps, forteOrder,
+    symmetries, forms, subsetClasses, supersetClasses, abstractInclusion, matrix,
   };
   if (typeof module !== 'undefined') module.exports = root.Forte;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
