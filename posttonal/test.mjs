@@ -88,4 +88,24 @@ assert.throws(() => F.parse('0 13'));
 
 same(F.relate([0, 1, 4], [5, 6, 9]), ['T5']);
 same(F.relate([0, 1, 4], [0, 11, 8]), ['T0I']);
+// Spelled transpositions keep the order and letter spacing, and avoid double accidentals.
+const tr = F.spelledTranspositions(F.parseTokens('C E G'));
+assert.equal(tr.length, 12);
+same(tr.map((t) => t.names.join(' ')), [
+  'C E G', 'D♭ F A♭', 'D F♯ A', 'E♭ G B♭', 'E G♯ B', 'F A C',
+  'F♯ A♯ C♯', 'G B D', 'A♭ C E♭', 'A C♯ E', 'B♭ D F', 'B D♯ F♯',
+]);
+same(F.spelledTranspositions(F.parseTokens('B D F'))[2].names, ['C♯', 'E', 'G']);
+same(F.spelledTranspositions(F.parseTokens('C D E C'))[0].names, ['C', 'D', 'E', 'C']);
+same(F.spelledTranspositions(F.parseTokens('C# E# G#'))[0].names, ['C♯', 'E♯', 'G♯']);
+same(F.spelledTranspositions(F.parseTokens('0 4 7'))[3].names, ['E♭', 'G', 'B♭']);
+for (let m = 1; m < 4096; m += 7) {
+  const s = [...Array(12).keys()].filter((i) => (m >> i) & 1);
+  for (const t of F.spelledTranspositions(s.map((pc) => ({ label: String(pc), pc })))) {
+    same(t.pcs, s.map((x) => (x + t.n) % 12));
+  }
+}
+assert.equal(F.intervalName(6, 3), 'A4');
+assert.equal(F.intervalName(6, 4), 'd5');
+assert.equal(F.intervalName(7, 4), 'P5');
 console.log('all post-tonal tests passed');

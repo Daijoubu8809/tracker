@@ -60,7 +60,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
   overflow-x: auto;
 }
-.tabs button { flex: 1 1 0; min-width: 0; border: 0; background: none; border-radius: 9px; padding: 8px 4px; font-weight: 600; font-size: 14px; color: var(--muted); white-space: nowrap; }
+.tabs button { flex: 1 0 auto; border: 0; background: none; border-radius: 9px; padding: 8px 6px; font-weight: 600; font-size: 13.5px; color: var(--muted); white-space: nowrap; }
 .tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); }
 
 .main { display: grid; gap: 16px; grid-template-columns: 1fr; }
@@ -148,6 +148,20 @@ table { border-collapse: collapse; font-size: 14px; }
 .forms td.f small { display: block; font: 11.5px var(--body); color: var(--muted); }
 .forms td.same { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
 
+#inputPanel.compact .clock, #inputPanel.compact .ops { display: none; }
+.keys-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.keys-head h2 { margin-right: auto; }
+.keys { width: 100%; }
+.keys td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.keys tr:last-child td { border-bottom: 0; }
+.keys td.op { font: 600 14px var(--mono); width: 1%; white-space: nowrap; }
+.keys td.op small { display: block; font: 500 11.5px var(--body); color: var(--muted); }
+.keys td.kn { font: 600 19px/1.3 var(--body); letter-spacing: 0.02em; }
+.keys td.kn small { display: block; font: 400 12.5px var(--mono); color: var(--muted); letter-spacing: 0; }
+.keys td.kp { width: 1%; text-align: right; }
+.keys tr.orig td { background: var(--accent-soft); }
+.keys tr.orig td.op { box-shadow: inset 3px 0 0 var(--accent); }
+.copybox { width: 100%; min-height: 160px; font: 13px var(--mono); border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); padding: 8px; }
 .compare-out { font-size: 14.5px; display: grid; gap: 6px; }
 .compare-out p { margin: 0; }
 
@@ -200,6 +214,7 @@ table { border-collapse: collapse; font-size: 14px; }
     <button type="button" role="tab" data-tab="set" aria-selected="true">Set</button>
     <button type="button" role="tab" data-tab="sub" aria-selected="false">Subsets</button>
     <button type="button" role="tab" data-tab="forms" aria-selected="false">Tn/TnI</button>
+    <button type="button" role="tab" data-tab="keys" aria-selected="false">Transpose</button>
     <button type="button" role="tab" data-tab="matrix" aria-selected="false">Matrix</button>
     <button type="button" role="tab" data-tab="list" aria-selected="false">List</button>
   </nav>
@@ -236,6 +251,8 @@ table { border-collapse: collapse; font-size: 14px; }
       </div>
       <div class="compare-out" id="compare"></div>
     </section>
+
+    <section class="panel" role="tabpanel" data-panel="keys" hidden id="keysOut"></section>
 
     <section class="panel" role="tabpanel" data-panel="matrix" hidden>
       <div class="entry">
@@ -286,7 +303,7 @@ table { border-collapse: collapse; font-size: 14px; }
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   };
-  const TABS = ['set', 'sub', 'forms', 'matrix', 'list'];
+  const TABS = ['set', 'sub', 'forms', 'keys', 'matrix', 'list'];
 
   let notation = store.get('notation') || 'te';
   let tab = TABS.includes(store.get('tab')) ? store.get('tab') : 'set';
@@ -294,6 +311,7 @@ table { border-collapse: collapse; font-size: 14px; }
   let tokens = [];
   let inputStyle = 'notes';
   let card = 4;
+  let keysSort = store.get('keysSort') === 'pitch' ? 'pitch' : 'tn';
   let mxLabels = store.get('mxLabels') === 'movable' ? 'movable' : 'fixed';
   let mxShow = store.get('mxShow') === 'notes' ? 'notes' : 'num';
   let mxSel = [];      // selected matrix cells, in the order chosen: [[row, col], ...]
@@ -339,6 +357,7 @@ table { border-collapse: collapse; font-size: 14px; }
     const solo = t === 'matrix' || t === 'list';
     $('inputPanel').hidden = solo;
     $('main').classList.toggle('solo', solo);
+    $('inputPanel').classList.toggle('compact', t === 'keys');
     renderActive();
   }
   $('tabs').addEventListener('click', (ev) => {
@@ -352,6 +371,7 @@ table { border-collapse: collapse; font-size: 14px; }
     if (tab === 'set') renderSet();
     else if (tab === 'sub') renderSub();
     else if (tab === 'forms') { renderForms(); renderCompare(); }
+    else if (tab === 'keys') renderKeys();
     else if (tab === 'matrix') renderMatrix();
     else renderTable();
   }
@@ -542,6 +562,61 @@ table { border-collapse: collapse; font-size: 14px; }
   }
   $('pcs2').addEventListener('input', renderCompare);
 
+  // ---- Transpose tab ----
+  // Every transposition in the order the notes were typed, repeats included.
+  function transpositions() {
+    const rows = F.spelledTranspositions(tokens);
+    return keysSort === 'pitch' ? [...rows].sort((a, b) => a.pcs[0] - b.pcs[0]) : rows;
+  }
+  const keyLabel = (t) => t.n ? `up ${F.intervalName(t.n, t.letterSteps)}` : 'original';
+
+  function renderKeys() {
+    const out = $('keysOut');
+    if (!tokens.length) { out.innerHTML = `<p class="muted">Type notes or tap the clock.</p>`; return; }
+    const rows = transpositions();
+    out.innerHTML = `
+      <div class="keys-head">
+        <h2>All 12 transpositions</h2>
+        <div class="seg" role="group" aria-label="Order" id="keysSort">
+          <button type="button" data-v="tn" aria-pressed="${keysSort === 'tn'}">T0–T11</button>
+          <button type="button" data-v="pitch" aria-pressed="${keysSort === 'pitch'}">C to B</button>
+        </div>
+        <button type="button" class="chip" id="keysCopy">Copy all</button>
+      </div>
+      <div class="scroll"><table class="keys"><tbody>
+        ${rows.map((t) => `<tr class="${t.n === 0 ? 'orig' : ''}">
+          <td class="op">T${t.n}<small>${keyLabel(t)}</small></td>
+          <td class="kn">${t.names.join(' ')}<small>${t.pcs.map(pc).join(' ')}</small></td>
+          <td class="kp"><button type="button" class="chip" data-play="${t.n}" aria-label="Play T${t.n}">▶</button></td>
+        </tr>`).join('')}
+      </tbody></table></div>
+      <div id="keysMsg"></div>`;
+  }
+
+  $('keysOut').addEventListener('click', (ev) => {
+    const sortBtn = ev.target.closest('#keysSort [data-v]');
+    const playBtn = ev.target.closest('[data-play]');
+    if (sortBtn) {
+      keysSort = sortBtn.dataset.v;
+      store.set('keysSort', keysSort);
+      renderKeys();
+    } else if (playBtn) {
+      play(F.spelledTranspositions(tokens)[+playBtn.dataset.play].pcs);
+    } else if (ev.target.closest('#keysCopy')) {
+      const text = transpositions().map((t) => `T${t.n} (${keyLabel(t)}): ${t.names.join(' ')}`).join('\n');
+      const showBox = () => {
+        $('keysMsg').innerHTML = `<p class="muted" style="font-size:13px">Copy from here:</p><textarea class="copybox" readonly id="keysText"></textarea>`;
+        $('keysText').value = text;
+        $('keysText').select();
+      };
+      try {
+        navigator.clipboard.writeText(text).then(
+          () => { $('keysMsg').innerHTML = '<p class="muted" style="font-size:13px">Copied all 12.</p>'; },
+          showBox);
+      } catch { showBox(); }
+    }
+  });
+
   // ---- Matrix tab ----
   function readRow() {
     const toks = F.parseTokens($('row').value);
@@ -692,7 +767,7 @@ table { border-collapse: collapse; font-size: 14px; }
     o.start(start);
     o.stop(start + dur + 0.05);
   }
-  // Plays the notes in order, each above the one before, then together as a chord.
+  // Plays the notes in order, each at or above the one before, then together as a chord.
   function play(order) {
     if (!order.length) return;
     try {
@@ -700,12 +775,13 @@ table { border-collapse: collapse; font-size: 14px; }
       audio.resume?.();
     } catch { return; }
     let prev = -Infinity;
-    const midi = order.map((p) => { let m = 60 + p; while (m <= prev) m += 12; prev = m; return m; });
+    const midi = order.map((p) => { let m = 60 + p; while (m < prev) m += 12; prev = m; return m; });
     while (midi[midi.length - 1] > 84 && midi[0] > 48) for (let i = 0; i < midi.length; i++) midi[i] -= 12;
     const t0 = audio.currentTime + 0.05, step = 0.3;
     midi.forEach((m, i) => tone(m, t0 + i * step, 0.6, 0.22));
     const chordAt = t0 + midi.length * step + 0.15;
-    midi.forEach((m) => tone(m, chordAt, 1.8, 0.5 / Math.max(2, midi.length)));
+    const chord = [...new Set(midi)];
+    chord.forEach((m) => tone(m, chordAt, 1.8, 0.5 / Math.max(2, chord.length)));
   }
   $('play').addEventListener('click', () => play(tokens.length ? [...new Set(tokens.map((t) => t.pc))] : current));
 

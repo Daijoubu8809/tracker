@@ -230,10 +230,65 @@
     return r.map((x) => r.map((y) => mod12(y + r[0] - x)));
   }
 
+  // ---- Spelled transposition ----
+  const LETTERS = 'CDEFGAB';
+  const NATURAL = [0, 2, 4, 5, 7, 9, 11];
+  const DEFAULT_SPELLING = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+  // Spellings preferred for a transposition's first note when two spellings are equally clean.
+  const PREFERRED_START = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+  // "Eb" -> { letter: 2, acc: -1 }. Number tokens get a default spelling.
+  function spellingOf(token) {
+    const label = /^[A-Ga-g]/.test(token.label) ? token.label : DEFAULT_SPELLING[token.pc];
+    let acc = 0;
+    for (const ch of label.slice(1)) acc += ch === '#' || ch === '♯' ? 1 : -1;
+    return { letter: LETTERS.indexOf(label[0].toUpperCase()), acc };
+  }
+  // Accidental needed to make `letter` sound as pitch class `pc`, in the range -5..6.
+  const accFor = (letter, pc) => { const d = mod12(pc - NATURAL[letter]); return d > 6 ? d - 12 : d; };
+  const noteName = ({ letter, acc }) => LETTERS[letter] + (acc > 0 ? '♯'.repeat(acc) : '♭'.repeat(-acc));
+  const asciiName = ({ letter, acc }) => LETTERS[letter] + (acc > 0 ? '#'.repeat(acc) : 'b'.repeat(-acc));
+
+  // All 12 transpositions of an ordered list of notes (repeats allowed), spelled by moving every
+  // letter name by the same number of steps. For each one the app picks whichever spelling of
+  // the first note gives the fewest accidentals. T0 keeps the user's own spelling.
+  function spelledTranspositions(tokens) {
+    if (!tokens.length) return [];
+    const src = tokens.map((t) => ({ ...spellingOf(t), pc: mod12(t.pc) }));
+    const first = src[0];
+    const out = [];
+    for (let n = 0; n < 12; n++) {
+      const target = mod12(first.pc + n);
+      const starts = n === 0 ? [first.letter]
+        : [...Array(7).keys()].filter((l) => Math.abs(accFor(l, target)) <= 1);
+      let best = null;
+      for (const startLetter of starts) {
+        const shift = startLetter - first.letter;
+        const notes = src.map((x) => {
+          const letter = (((x.letter + shift) % 7) + 7) % 7;
+          return { letter, acc: accFor(letter, x.pc + n), pc: mod12(x.pc + n) };
+        });
+        const score = notes.reduce((t, x) => t + (x.acc === 0 ? 0 : Math.abs(x.acc) === 1 ? 1 : 4), 0)
+          + (asciiName(notes[0]) === PREFERRED_START[target] ? 0 : 0.5);
+        if (!best || score < best.score) best = { score, notes, shift: ((shift % 7) + 7) % 7 };
+      }
+      out.push({ n, notes: best.notes, letterSteps: best.shift, names: best.notes.map(noteName), pcs: best.notes.map((x) => x.pc) });
+    }
+    return out;
+  }
+
+  // Interval name for transposing up n semitones across `steps` letter names.
+  function intervalName(n, steps) {
+    const names = ['P1', 'm2', 'M2', 'm3', 'M3', 'P4', '', 'P5', 'm6', 'M6', 'm7', 'M7'];
+    if (n === 6) return steps === 3 ? 'A4' : 'd5';
+    return names[n];
+  }
+
   root.Forte = {
     TABLE, list, byPrime, byName, mod12, normalForm, primeForm, intervalVector,
     transpose, invert, multiply, complement, identify, relate, parse, parseTokens, key,
     symmetries, forms, subsetClasses, supersetClasses, abstractInclusion, matrix,
+    spelledTranspositions, intervalName,
   };
   if (typeof module !== 'undefined') module.exports = root.Forte;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
