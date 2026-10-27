@@ -895,14 +895,14 @@ table { border-collapse: collapse; font-size: 14px; }
   // Computer keys, GarageBand style: home row is white keys, the row above is black keys.
   const KEY_CODES = ['KeyA', 'KeyW', 'KeyS', 'KeyE', 'KeyD', 'KeyF', 'KeyT', 'KeyG', 'KeyY', 'KeyH', 'KeyU', 'KeyJ', 'KeyK', 'KeyO', 'KeyL', 'KeyP', 'Semicolon', 'Quote'];
   const KEY_LETTERS = ['A', 'W', 'S', 'E', 'D', 'F', 'T', 'G', 'Y', 'H', 'U', 'J', 'K', 'O', 'L', 'P', ';', "'"];
-  const HOLD_MS = 5000;
+  const HOLD_MS = 3000;
   const sounding = new Map();   // midi -> { sources: Set, release }
   const pointerNote = new Map(); // pointerId -> midi
   const keyNote = new Map();     // key code -> midi
   let octaves = 2;
   let baseOct = Math.min(5, Math.max(2, +store.get('pianoOct') || 3)); // octave of the leftmost C
   let latch = false;
-  let captured = null;           // midis caught by a 5-second hold; kept until Reset
+  let captured = null;           // midis caught by a 3-second hold; kept until Reset
   let holdStart = 0, holdRaf = 0;
 
   const baseMidi = () => 12 * (baseOct + 1);
@@ -993,7 +993,7 @@ table { border-collapse: collapse; font-size: 14px; }
       html = `${ms.map(midiName).join(' ')} · <b>${F.identify(ms.map((m) => m % 12)).entry.name}</b> · ${((HOLD_MS - t) / 1000).toFixed(1)} s`;
       fill = t / HOLD_MS;
     } else {
-      html = '<span class="muted">Hold notes for 5 s to capture the set</span>';
+      html = '<span class="muted">Hold notes for 3 s to capture the set</span>';
       fill = 0;
     }
     $('holdText').innerHTML = html;
