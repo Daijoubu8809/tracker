@@ -16,6 +16,8 @@
   --accent-soft: #e4eaff;
   --accent-fg: #ffffff;
   --warn: #9a5b00;
+  --key-white: #ffffff;
+  --key-black: #1c2030;
   --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
   --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -24,11 +26,13 @@
   :root:not([data-theme="light"]) {
     --bg: #11141b; --surface: #191d27; --line: #2c3240; --fg: #e7e9ef; --muted: #9aa2b5;
     --accent: #87a3ff; --accent-soft: #232c4a; --accent-fg: #0d1020; --warn: #e3a74f; color-scheme: dark;
+    --key-white: #dfe2ea; --key-black: #07080c;
   }
 }
 :root[data-theme="dark"] {
   --bg: #11141b; --surface: #191d27; --line: #2c3240; --fg: #e7e9ef; --muted: #9aa2b5;
   --accent: #87a3ff; --accent-soft: #232c4a; --accent-fg: #0d1020; --warn: #e3a74f; color-scheme: dark;
+  --key-white: #dfe2ea; --key-black: #07080c;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -148,6 +152,36 @@ table { border-collapse: collapse; font-size: 14px; }
 .forms td.f small { display: block; font: 11.5px var(--body); color: var(--muted); }
 .forms td.same { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
 
+.piano-panel { grid-column: 1 / -1; gap: 10px; }
+.piano-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.hold { flex: 1 1 240px; min-width: 0; display: grid; gap: 6px; }
+.hold-text { font-size: 14px; min-height: 1.5em; overflow-wrap: anywhere; }
+.hold-text b { color: var(--accent); font: 700 17px var(--display); }
+.meter { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--accent); }
+.piano-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.oct { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; width: 34px; height: 34px; }
+.oct-label { font: 500 13px var(--mono); min-width: 62px; text-align: center; }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.chip.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-family: var(--body); font-weight: 600; }
+.piano { position: relative; height: clamp(130px, 28vw, 190px); display: flex; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.wk {
+  flex: 1; position: relative; margin-right: -1px; background: var(--key-white); border: 1px solid var(--line);
+  border-radius: 0 0 7px 7px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+  gap: 2px; padding-bottom: 6px; font: 10px var(--body); color: #5b6375; cursor: pointer;
+}
+.bk {
+  position: absolute; top: 0; height: 60%; width: var(--bw); z-index: 2; background: var(--key-black);
+  border-radius: 0 0 5px 5px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+  padding-bottom: 5px; font: 10px var(--body); color: #9aa2b5; cursor: pointer;
+}
+.wk.down, .bk.down { background: var(--accent); color: var(--accent-fg); }
+.wk.cap::before, .bk.cap::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); margin-bottom: 4px; }
+.wk.cap.down::before, .bk.cap.down::before { background: var(--accent-fg); }
+.kl { display: none; font-weight: 600; }
+@media (hover: hover) and (pointer: fine) { .kl { display: block; } }
+.cn { font-weight: 600; }
+.credit { font-size: 12px; color: var(--muted); text-align: center; }
 #inputPanel.compact .clock, #inputPanel.compact .ops { display: none; }
 .keys-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 .keys-head h2 { margin-right: auto; }
@@ -220,6 +254,23 @@ table { border-collapse: collapse; font-size: 14px; }
   </nav>
 
   <div class="main" id="main">
+    <section class="panel piano-panel" id="pianoPanel" aria-label="Piano">
+      <div class="piano-bar">
+        <div class="hold" id="hold" role="status">
+          <div class="hold-text" id="holdText"></div>
+          <div class="meter"><i id="holdMeter"></i></div>
+        </div>
+        <div class="piano-tools">
+          <button type="button" class="oct" id="octDown" aria-label="Octave down">◀</button>
+          <span class="oct-label" id="octLabel"></span>
+          <button type="button" class="oct" id="octUp" aria-label="Octave up">▶</button>
+          <button type="button" class="chip" id="latch" aria-pressed="false">Latch</button>
+          <button type="button" class="chip" id="pianoReset">Reset</button>
+        </div>
+      </div>
+      <div class="piano" id="piano"></div>
+    </section>
+
     <section class="panel" id="inputPanel" aria-label="Enter a set">
       <div class="entry">
         <label class="label" for="pcs">Notes or pitch classes</label>
@@ -291,6 +342,7 @@ table { border-collapse: collapse; font-size: 14px; }
       </div>
     </section>
   </div>
+  <p class="credit">Piano sound: Salamander Grand Piano by Alexander Holm (CC BY 3.0)</p>
 </div>
 
 <script src="forte.js"></script>
@@ -356,6 +408,7 @@ table { border-collapse: collapse; font-size: 14px; }
     document.querySelectorAll('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== t; });
     const solo = t === 'matrix' || t === 'list';
     $('inputPanel').hidden = solo;
+    $('pianoPanel').hidden = solo;
     $('main').classList.toggle('solo', solo);
     $('inputPanel').classList.toggle('compact', t === 'keys');
     renderActive();
@@ -754,36 +807,286 @@ table { border-collapse: collapse; font-size: 14px; }
     applyNotation();
   });
 
-  // ---- sound ----
-  let audio;
-  function tone(midi, start, dur, gain) {
-    const o = audio.createOscillator(), g = audio.createGain();
-    o.type = 'triangle';
-    o.frequency.value = 440 * 2 ** ((midi - 69) / 12);
-    g.gain.setValueAtTime(0, start);
-    g.gain.linearRampToValueAtTime(gain, start + 0.015);
-    g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-    o.connect(g).connect(audio.destination);
-    o.start(start);
-    o.stop(start + dur + 0.05);
+  // ---- piano sound ----
+  // Salamander Grand Piano samples every minor third from C2 to C7; each note uses the nearest.
+  const SAMPLES = [];
+  for (let o = 2; o <= 6; o++) ['C', 'Ds', 'Fs', 'A'].forEach((n, i) => SAMPLES.push({ midi: 12 * (o + 1) + i * 3, file: `piano/${n}${o}.mp3` }));
+  SAMPLES.push({ midi: 96, file: 'piano/C7.mp3' });
+  let audio, out, decoder;
+  const decoded = new Map();  // sample midi -> AudioBuffer
+  const loading = new Map();  // sample midi -> Promise<AudioBuffer | null>
+  function ctx() {
+    if (!audio) {
+      audio = new (window.AudioContext || window.webkitAudioContext)();
+      out = audio.createDynamicsCompressor();
+      out.connect(audio.destination);
+    }
+    if (audio.state === 'suspended') audio.resume();
+    return audio;
   }
+  const nearest = (m) => SAMPLES.reduce((a, b) => Math.abs(b.midi - m) < Math.abs(a.midi - m) ? b : a);
+  function loadSample(s) {
+    // Opened as a local file, the browser refuses to fetch the samples; the synth stands in.
+    if (location.protocol === 'file:') return Promise.resolve(null);
+    if (!loading.has(s.midi)) {
+      loading.set(s.midi, fetch(s.file)
+        .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.arrayBuffer(); })
+        .then((buf) => {
+          // Decode offline so samples can load before the first tap starts real audio.
+          decoder = decoder || new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(2, 1, 44100);
+          return new Promise((res, rej) => decoder.decodeAudioData(buf, res, rej));
+        })
+        .then((b) => { decoded.set(s.midi, b); return b; })
+        .catch(() => null));
+    }
+    return loading.get(s.midi);
+  }
+  const preload = (midis) => Promise.all([...new Set(midis.map(nearest))].map(loadSample));
+
+  // Starts a note now (or at `when`) and returns a function that releases it.
+  function noteOn(m, when, velocity = 0.8) {
+    const a = ctx(), t = when ?? a.currentTime;
+    const g = a.createGain();
+    g.connect(out);
+    const s = nearest(m), buf = decoded.get(s.midi);
+    let node;
+    if (buf) {
+      node = a.createBufferSource();
+      node.buffer = buf;
+      node.playbackRate.value = 2 ** ((m - s.midi) / 12);
+      g.gain.setValueAtTime(velocity, t);
+    } else {
+      // Sample still loading: a soft synth note stands in.
+      loadSample(s);
+      node = a.createOscillator();
+      node.type = 'triangle';
+      node.frequency.value = 440 * 2 ** ((m - 69) / 12);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.25 * velocity, t + 0.01);
+      g.gain.setTargetAtTime(0, t + 0.01, 0.8);
+    }
+    node.connect(g);
+    node.start(t);
+    return (at) => {
+      const r = Math.max(at ?? a.currentTime, t);
+      g.gain.cancelScheduledValues(r);
+      g.gain.setTargetAtTime(0, r, 0.09);
+      node.stop(r + 0.8);
+    };
+  }
+
   // Plays the notes in order, each at or above the one before, then together as a chord.
-  function play(order) {
+  async function play(order) {
     if (!order.length) return;
-    try {
-      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-      audio.resume?.();
-    } catch { return; }
+    try { ctx(); } catch { return; }
     let prev = -Infinity;
     const midi = order.map((p) => { let m = 60 + p; while (m < prev) m += 12; prev = m; return m; });
     while (midi[midi.length - 1] > 84 && midi[0] > 48) for (let i = 0; i < midi.length; i++) midi[i] -= 12;
-    const t0 = audio.currentTime + 0.05, step = 0.3;
-    midi.forEach((m, i) => tone(m, t0 + i * step, 0.6, 0.22));
-    const chordAt = t0 + midi.length * step + 0.15;
-    const chord = [...new Set(midi)];
-    chord.forEach((m) => tone(m, chordAt, 1.8, 0.5 / Math.max(2, chord.length)));
+    await Promise.race([preload(midi), new Promise((r) => setTimeout(r, 1500))]);
+    const t0 = audio.currentTime + 0.05, step = 0.32;
+    midi.forEach((m, i) => noteOn(m, t0 + i * step, 0.7)(t0 + i * step + 0.6));
+    const chordAt = t0 + midi.length * step + 0.15, chord = [...new Set(midi)];
+    chord.forEach((m) => noteOn(m, chordAt, 0.9 / Math.sqrt(chord.length))(chordAt + 2.4));
   }
   $('play').addEventListener('click', () => play(tokens.length ? [...new Set(tokens.map((t) => t.pc))] : current));
+
+  // ---- piano keyboard ----
+  const WHITE = [0, 2, 4, 5, 7, 9, 11];
+  // Computer keys, GarageBand style: home row is white keys, the row above is black keys.
+  const KEY_CODES = ['KeyA', 'KeyW', 'KeyS', 'KeyE', 'KeyD', 'KeyF', 'KeyT', 'KeyG', 'KeyY', 'KeyH', 'KeyU', 'KeyJ', 'KeyK', 'KeyO', 'KeyL', 'KeyP', 'Semicolon', 'Quote'];
+  const KEY_LETTERS = ['A', 'W', 'S', 'E', 'D', 'F', 'T', 'G', 'Y', 'H', 'U', 'J', 'K', 'O', 'L', 'P', ';', "'"];
+  const HOLD_MS = 5000;
+  const sounding = new Map();   // midi -> { sources: Set, release }
+  const pointerNote = new Map(); // pointerId -> midi
+  const keyNote = new Map();     // key code -> midi
+  let octaves = 2;
+  let baseOct = Math.min(5, Math.max(2, +store.get('pianoOct') || 3)); // octave of the leftmost C
+  let latch = false;
+  let captured = null;           // midis caught by a 5-second hold; kept until Reset
+  let holdStart = 0, holdRaf = 0;
+
+  const baseMidi = () => 12 * (baseOct + 1);
+  const midiName = (m) => NAMES[m % 12] + (Math.floor(m / 12) - 1);
+  const visibleMidis = () => [...Array(12 * octaves).keys()].map((i) => baseMidi() + i);
+
+  function renderPiano() {
+    octaves = window.innerWidth >= 900 ? 3 : 2;
+    baseOct = Math.min(baseOct, 7 - octaves);
+    const lo = baseMidi(), whites = [], blacks = [], wCount = 7 * octaves;
+    let wi = 0;
+    for (let m = lo; m < lo + 12 * octaves; m++) {
+      const letter = KEY_LETTERS[m - lo] ? `<span class="kl">${KEY_LETTERS[m - lo]}</span>` : '';
+      if (WHITE.includes(m % 12)) {
+        whites.push(`<div class="wk" data-midi="${m}" aria-label="${midiName(m)}">${letter}${m % 12 === 0 ? `<span class="cn">${midiName(m)}</span>` : ''}</div>`);
+        wi++;
+      } else {
+        blacks.push(`<div class="bk" data-midi="${m}" aria-label="${midiName(m)}" style="left:calc(${(wi / wCount) * 100}% - var(--bw) / 2)">${letter}</div>`);
+      }
+    }
+    $('piano').style.setProperty('--bw', `${(100 / wCount) * 0.62}%`);
+    $('piano').innerHTML = whites.join('') + blacks.join('');
+    $('octLabel').textContent = `C${baseOct}–B${baseOct + octaves - 1}`;
+    $('octDown').disabled = baseOct <= 2;
+    $('octUp').disabled = baseOct >= 7 - octaves;
+    paintKeys();
+  }
+
+  function paintKeys() {
+    $('piano').querySelectorAll('[data-midi]').forEach((k) => {
+      const m = +k.dataset.midi;
+      k.classList.toggle('down', sounding.has(m));
+      k.classList.toggle('cap', !!captured && captured.includes(m));
+    });
+  }
+
+  function press(m, src) {
+    let s = sounding.get(m);
+    if (!s) {
+      let release = () => {};
+      try { release = noteOn(m); } catch {}
+      s = { sources: new Set(), release };
+      sounding.set(m, s);
+    }
+    s.sources.add(src);
+    heldChanged();
+  }
+  function release(m, src) {
+    const s = sounding.get(m);
+    if (!s) return;
+    s.sources.delete(src);
+    if (!s.sources.size) { s.release(); sounding.delete(m); }
+    heldChanged();
+  }
+  const toggleLatched = (m) => sounding.get(m)?.sources.has('latch') ? release(m, 'latch') : press(m, 'latch');
+
+  // ---- hold to capture ----
+  function heldChanged() {
+    paintKeys();
+    cancelAnimationFrame(holdRaf);
+    holdStart = !captured && sounding.size ? performance.now() : 0;
+    renderHold(0);
+    if (holdStart) holdRaf = requestAnimationFrame(tickHold);
+  }
+  function tickHold() {
+    if (!holdStart) return;
+    const t = performance.now() - holdStart;
+    if (t >= HOLD_MS) { capture(); return; }
+    renderHold(t);
+    holdRaf = requestAnimationFrame(tickHold);
+  }
+  function capture() {
+    holdStart = 0;
+    captured = [...sounding.keys()].sort((a, b) => a - b);
+    inputStyle = 'notes';
+    setInput(captured.map((m) => m % 12), [...new Set(captured.map((m) => m % 12))]);
+    renderHold(0);
+    paintKeys();
+  }
+  function renderHold(t) {
+    let html, fill;
+    if (captured) {
+      const e = F.identify(captured.map((m) => m % 12)).entry;
+      html = `Captured <b>${e.name}</b> <span class="mono">${fmt(e.prime, '()')}</span> · ${captured.map(midiName).join(' ')}`;
+      fill = 1;
+    } else if (sounding.size) {
+      const ms = [...sounding.keys()].sort((a, b) => a - b);
+      html = `${ms.map(midiName).join(' ')} · <b>${F.identify(ms.map((m) => m % 12)).entry.name}</b> · ${((HOLD_MS - t) / 1000).toFixed(1)} s`;
+      fill = t / HOLD_MS;
+    } else {
+      html = '<span class="muted">Hold notes for 5 s to capture the set</span>';
+      fill = 0;
+    }
+    $('holdText').innerHTML = html;
+    $('holdMeter').style.width = `${fill * 100}%`;
+    $('pianoReset').classList.toggle('primary', !!captured);
+  }
+  $('pianoReset').addEventListener('click', () => {
+    captured = null;
+    for (const [m, s] of [...sounding]) if (s.sources.has('latch')) release(m, 'latch');
+    setInput([]);
+    heldChanged();
+  });
+  $('latch').addEventListener('click', () => {
+    latch = !latch;
+    $('latch').setAttribute('aria-pressed', latch);
+    if (!latch) for (const [m, s] of [...sounding]) if (s.sources.has('latch')) release(m, 'latch');
+  });
+
+  // ---- touch and mouse ----
+  const piano = $('piano');
+  const keyAt = (x, y) => document.elementFromPoint(x, y)?.closest?.('#piano [data-midi]');
+  piano.addEventListener('pointerdown', (e) => {
+    const k = e.target.closest('[data-midi]');
+    if (!k) return;
+    e.preventDefault();
+    const m = +k.dataset.midi;
+    if (latch) { toggleLatched(m); return; }
+    try { piano.setPointerCapture(e.pointerId); } catch {}
+    pointerNote.set(e.pointerId, m);
+    press(m, 'p' + e.pointerId);
+  });
+  // Sliding a finger across the keys plays each one it lands on.
+  piano.addEventListener('pointermove', (e) => {
+    if (!pointerNote.has(e.pointerId)) return;
+    const k = keyAt(e.clientX, e.clientY);
+    const m = k ? +k.dataset.midi : null, old = pointerNote.get(e.pointerId);
+    if (m === old) return;
+    if (old !== null) release(old, 'p' + e.pointerId);
+    if (m !== null) press(m, 'p' + e.pointerId);
+    pointerNote.set(e.pointerId, m);
+  });
+  const pointerEnd = (e) => {
+    if (!pointerNote.has(e.pointerId)) return;
+    const m = pointerNote.get(e.pointerId);
+    pointerNote.delete(e.pointerId);
+    if (m !== null) release(m, 'p' + e.pointerId);
+  };
+  piano.addEventListener('pointerup', pointerEnd);
+  piano.addEventListener('pointercancel', pointerEnd);
+  piano.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // ---- computer keyboard ----
+  const typing = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+  function shiftOct(d) {
+    const next = Math.min(7 - octaves, Math.max(2, baseOct + d));
+    if (next === baseOct) return;
+    baseOct = next;
+    store.set('pianoOct', baseOct);
+    renderPiano();
+    preload(visibleMidis());
+  }
+  $('octDown').addEventListener('click', () => shiftOct(-1));
+  $('octUp').addEventListener('click', () => shiftOct(1));
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || typing(document.activeElement) || $('pianoPanel').hidden) return;
+    if (e.code === 'KeyZ' || e.code === 'KeyX') { e.preventDefault(); shiftOct(e.code === 'KeyZ' ? -1 : 1); return; }
+    const i = KEY_CODES.indexOf(e.code);
+    if (i < 0) return;
+    e.preventDefault();
+    const m = baseMidi() + i;
+    if (latch) { toggleLatched(m); return; }
+    if (keyNote.has(e.code)) return;
+    keyNote.set(e.code, m);
+    press(m, e.code);
+  });
+  window.addEventListener('keyup', (e) => {
+    if (!keyNote.has(e.code)) return;
+    const m = keyNote.get(e.code);
+    keyNote.delete(e.code);
+    release(m, e.code);
+  });
+  // Letting go of everything when the window loses focus avoids stuck notes.
+  window.addEventListener('blur', () => {
+    for (const [code, m] of [...keyNote]) { keyNote.delete(code); release(m, code); }
+    for (const [id, m] of [...pointerNote]) { pointerNote.delete(id); if (m !== null) release(m, 'p' + id); }
+  });
+  let lastOctaves = 0;
+  window.addEventListener('resize', () => { if ((window.innerWidth >= 900 ? 3 : 2) !== lastOctaves) { renderPiano(); lastOctaves = octaves; } });
+
+  renderPiano();
+  lastOctaves = octaves;
+  renderHold(0);
+  setTimeout(() => preload(visibleMidis()), 400);
 
   readInput();
   $('notation').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.n === notation));
